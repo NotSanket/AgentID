@@ -88,7 +88,7 @@ After the migration and environment configuration:
 
 ```powershell
 cd "C:\BlockChain Project67\backend"
-$env:NODE_OPTIONS='--require=../.tools/node-userinfo-workaround.cjs' # current Codex/Windows host only
+$env:NODE_OPTIONS='--use-system-ca --require=../.tools/node-userinfo-workaround.cjs' # current Codex/Windows host only
 npm run seed:data
 ```
 
@@ -100,7 +100,7 @@ Start the local blockchain and seed `AgentRegistry` as described in the root REA
 
 ```powershell
 cd "C:\BlockChain Project67\backend"
-$env:NODE_OPTIONS='--require=../.tools/node-userinfo-workaround.cjs' # current Codex/Windows host only
+$env:NODE_OPTIONS='--use-system-ca --require=../.tools/node-userinfo-workaround.cjs' # current Codex/Windows host only
 npm run dev
 ```
 
@@ -174,5 +174,6 @@ The suite covers fallback behavior, persistence interfaces, filtering, paginatio
 - Audit or interaction persistence warning: the security decision or verified response was preserved, but the operational record could not be stored.
 - Empty metadata table: run `npm run seed:data` with Supabase mode confirmed.
 - Local Hardhat identity missing: restart the local node, then rerun `npm run demo:localhost`; Supabase does not replace blockchain registration.
+- `TypeError: fetch failed` on the current Codex/Windows host: include `--use-system-ca` in `NODE_OPTIONS` as shown above so Node uses the system CA store.
 
-Live Supabase connectivity was not verified during Stage 3 implementation because no real project URL or server key was provided. The official client integration is implemented and covered with mocked-client tests.
+Live Supabase persistence was verified against the configured real project on 2026-09-19. The health endpoint reported `SUPABASE` mode and chain ID `31337`; all three metadata rows were present; a verified request persisted its audit, interaction, and nonce across a backend-only restart; the same request was then blocked with `NONCE_REUSED`; and analytics reflected the persistent verified and blocked records. No secret value was printed or committed.

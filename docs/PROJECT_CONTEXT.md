@@ -26,7 +26,7 @@ The current implementation has these layers:
 - a complete in-memory persistence fallback;
 - analytics calculated from stored authentication and interaction records.
 
-The frontend has **not** been implemented. The `frontend/` directory contains only a placeholder README. Supabase support is implemented, but live connectivity has not been verified because real project credentials were not provided.
+The frontend has **not** been implemented. The `frontend/` directory contains only a placeholder README. Supabase support is implemented and live persistence against the configured real project was verified on 2026-09-19.
 
 ## Stage 1 — Blockchain Foundation
 
@@ -135,6 +135,19 @@ Stage 3 includes:
 - a complete offline test suite using memory and mocked Supabase clients.
 
 Verified backend result after Stage 3: **68 / 68 tests passing**. This is the preserved 39 Stage 2 tests plus **29 Stage 3 tests**.
+
+### Live Supabase verification
+
+Live persistence was verified against the configured real Supabase project on 2026-09-19 without exposing or committing its server secret. The verification used a fresh local Hardhat chain and seeded registry, then confirmed:
+
+- `/api/health` reported blockchain connectivity, chain ID `31337`, `persistenceMode: "SUPABASE"`, and `supabaseConnected: true`;
+- the three TravelAI, HotelAI, and PaymentAI metadata rows existed;
+- one valid TravelAI-to-HotelAI request was verified and created an audit event, interaction, and consumed replay nonce;
+- all three records still existed after restarting only the backend;
+- replaying the previously accepted signed request after restart was blocked with `NONCE_REUSED`;
+- stored-data analytics reported two verification attempts, one verified request, one blocked request, one interaction, and one `NONCE_REUSED` block.
+
+The live verification passed alongside the 31 Stage 1 tests, 39 preserved Stage 2 tests, 29 Stage 3 tests, backend typecheck, blockchain typecheck, and Solidity compile.
 
 ### Database tables
 
@@ -272,14 +285,14 @@ The local end-to-end workflow is: keep `npm run node` running in one blockchain 
 
 ### Current Windows Workaround
 
-On the current Windows/Codex host, Node's `os.userInfo()` fails during `tsx`/Hardhat startup and the normal user-profile Hardhat compiler cache can be locked or unavailable. The existing repository-local workaround is still needed in this environment:
+On the current Windows/Codex host, Node's `os.userInfo()` fails during `tsx`/Hardhat startup, the normal user-profile Hardhat compiler cache can be locked or unavailable, and live Supabase HTTPS needs Node's system CA store. The existing repository-local workaround is still needed in this environment:
 
 ```powershell
-$env:NODE_OPTIONS='--require=../.tools/node-userinfo-workaround.cjs'
+$env:NODE_OPTIONS='--use-system-ca --require=../.tools/node-userinfo-workaround.cjs'
 $env:LOCALAPPDATA='C:\BlockChain Project67\.tools\localappdata'
 ```
 
-Set both variables before Hardhat commands. The `NODE_OPTIONS` preload is also needed before `tsx` commands such as `npm run dev` and `npm run demo:auth` on this host. A normal Windows installation where `os.userInfo()` and the user cache work does not need these overrides.
+Set both variables before Hardhat commands. The `NODE_OPTIONS` preload is also needed before `tsx` commands such as `npm run dev` and `npm run demo:auth` on this host; `--use-system-ca` allows live Supabase TLS validation in this environment. A normal Windows installation where `os.userInfo()`, the user cache, and Node TLS validation work does not need these overrides.
 
 To clear the overrides from the current PowerShell session:
 
@@ -292,9 +305,10 @@ Remove-Item Env:\LOCALAPPDATA -ErrorAction SilentlyContinue
 
 - The current Windows/Codex host needs `.tools/node-userinfo-workaround.cjs` for the Node `os.userInfo()` failure described above.
 - Hardhat commands on this host use `.tools/localappdata` to avoid the unavailable or stale user-profile compiler cache.
+- Live Supabase access on this host needs Node's `--use-system-ca` option; without it, the startup health check fails closed to `IN_MEMORY` mode.
 - Git is initialized. In the current Codex shell, Git is installed at `C:\Program Files\Git\cmd\git.exe` but is not on `PATH`, so automation may need to invoke that full path.
 - In `IN_MEMORY` mode, replay nonces, audit events, and interactions reset whenever the backend restarts.
-- Supabase integration is implemented and mocked in automated tests, but live connectivity has not been verified without real credentials.
+- Supabase integration is covered by automated tests and live persistence was verified against the configured real project on 2026-09-19.
 - Supabase requires the committed migration and metadata seed to be run manually for a new project.
 - A local Hardhat chain and all of its deployed contract state reset whenever that local chain is restarted. Run the localhost seed again and use the refreshed deployment manifest.
 - The demo uses unlocked local Hardhat accounts only. It must not be used with real funds.

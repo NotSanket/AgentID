@@ -21,7 +21,7 @@ Identity verification does not prove that an agent is safe, truthful, intelligen
 - REST endpoints, 39 preserved Stage 2 tests, and 29 Stage 3 tests;
 - real local authentication terminal demo.
 
-There is no frontend or LLM integration yet. Supabase support is implemented, but real credentials are optional and were not available for live-connectivity verification.
+There is no frontend or LLM integration yet. Supabase remains optional, and live persistence against the configured real project was verified on 2026-09-19, including persistence across a backend-only restart and replay blocking from the stored nonce.
 
 ## Prerequisites
 
