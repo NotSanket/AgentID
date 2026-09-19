@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { Contract, JsonRpcProvider, getAddress, isAddress, type InterfaceAbi } from "ethers";
 import type { RuntimeConfig } from "../config/runtime.js";
-import type { AgentRecord, RegistryReader } from "../domain/types.js";
+import type { AgentRecord, IdentityContractConfig, IdentityLifecycleEvent, IdentityLifecycleEventType, RegistryReader } from "../domain/types.js";
 
 export interface BlockchainHealth {
   connected: boolean;
@@ -19,17 +19,20 @@ interface Artifact { abi: InterfaceAbi }
 export class BlockchainService implements RegistryReader {
   readonly provider: JsonRpcProvider;
   readonly address: string;
+  readonly abi: InterfaceAbi;
   private readonly contract?: Contract;
   private readonly initializationError?: string;
 
   constructor(private readonly config: RuntimeConfig) {
     this.provider = new JsonRpcProvider(config.rpcUrl);
     this.address = config.registryAddress;
+    this.abi = [];
 
     try {
       if (!isAddress(this.address)) throw new Error("AgentRegistry address is missing or invalid.");
       if (!existsSync(config.artifactPath)) throw new Error(`Compiled ABI artifact not found: ${config.artifactPath}`);
       const artifact = JSON.parse(readFileSync(config.artifactPath, "utf8")) as Artifact;
+      this.abi = artifact.abi;
       this.contract = new Contract(getAddress(this.address), artifact.abi, this.provider);
     } catch (error) {
       this.initializationError = error instanceof Error ? error.message : String(error);
@@ -94,6 +97,46 @@ export class BlockchainService implements RegistryReader {
     }
     const records = await Promise.all([...ids].map((id) => this.getAgent(id)));
     return records.filter((record): record is AgentRecord => record !== null);
+  }
+
+  async contractConfig(): Promise<IdentityContractConfig> {
+    await this.requireOperationalContract();
+    return {
+      network: this.config.networkName,
+      chainId: this.config.expectedChainId,
+      registryAddress: getAddress(this.address),
+      abi: this.abi as readonly unknown[],
+    };
+  }
+
+  async getLifecycleEvents(agentId: string): Promise<IdentityLifecycleEvent[]> {
+    const contract = await this.requireOperationalContract();
+    const definitions: Array<[string, IdentityLifecycleEventType]> = [
+      ["AgentRegistered", "Registered"],
+      ["AgentUpdated", "Updated"],
+      ["AgentRevoked", "Revoked"],
+      ["AgentReactivated", "Reactivated"],
+    ];
+    const groups = await Promise.all(definitions.map(async ([eventName, type]) => {
+      const filter = contract.filters[eventName]();
+      const events = await contract.queryFilter(filter, 0, "latest");
+      return events.flatMap((event): IdentityLifecycleEvent[] => {
+        if (!("args" in event) || event.args?.agentId !== agentId) return [];
+        return [{
+          type,
+          agentId,
+          owner: getAddress(event.args.owner),
+          timestamp: event.args.timestamp.toString(),
+          blockNumber: event.blockNumber,
+          transactionHash: event.transactionHash,
+        }];
+      });
+    }));
+    return groups.flat().sort((a, b) => a.blockNumber - b.blockNumber);
+  }
+
+  async getContract(): Promise<Contract> {
+    return this.requireOperationalContract();
   }
 
   private async requireOperationalContract(): Promise<Contract> {

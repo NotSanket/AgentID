@@ -35,6 +35,6 @@ describe("Stage 4 trusted frontend origins", () => {
     const response = await request(app()).options("/api/health").set("Origin", "http://127.0.0.1:5173");
     expect(response.status).toBe(204);
     expect(response.headers["access-control-allow-origin"]).toBe("http://127.0.0.1:5173");
-    expect(response.headers["access-control-allow-methods"]).toBe("GET,POST,OPTIONS");
+    expect(response.headers["access-control-allow-methods"]).toBe("GET,POST,PUT,OPTIONS");
   });
 });

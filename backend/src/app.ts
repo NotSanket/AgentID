@@ -7,9 +7,11 @@ import type { CommunicationService } from "./services/communication-service.js";
 import type { AuditStore } from "./stores/audit-store.js";
 import type { RegistryReader } from "./domain/types.js";
 import type { BlockchainHealth } from "./blockchain/blockchain-service.js";
+import type { IdentityContractConfig, IdentityLifecycleEvent } from "./domain/types.js";
 import type { InteractionStore, PersistenceStatus } from "./persistence/types.js";
 import type { AnalyticsService } from "./services/analytics-service.js";
-import type { MetadataService } from "./services/metadata-service.js";
+import { MetadataAuthorizationError, type MetadataService } from "./services/metadata-service.js";
+import { DemoIdentityWriteService, IdentityWriteError } from "./services/identity-write-service.js";
 
 const paginationFields = {
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -31,8 +33,37 @@ const interactionQuerySchema = z.object({
   action: z.string().trim().min(1).max(64).optional(),
 });
 
+const agentIdSchema = z.string().trim().min(3).max(64).regex(/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/);
+const metadataSchema = z.object({
+  displayName: z.string().trim().max(128).nullable().optional(),
+  description: z.string().trim().max(2000).nullable().optional(),
+  category: z.string().trim().max(64).nullable().optional(),
+  capabilities: z.array(z.string().trim().min(1).max(64).regex(/^[A-Z0-9_]+$/)).max(24),
+  avatarKey: z.string().trim().max(64).nullable().optional(),
+  accentTheme: z.string().trim().max(64).nullable().optional(),
+});
+const identityProfileSchema = z.object({
+  wallet: z.string().refine(isAddress),
+  agentId: agentIdSchema,
+  name: z.string().trim().min(1).max(128),
+  organization: z.string().trim().min(1).max(128),
+  metadataURI: z.string().trim().max(512).optional(),
+  metadata: metadataSchema.optional(),
+});
+const lifecycleSchema = z.object({ wallet: z.string().refine(isAddress) });
+const authorizedMetadataSchema = z.object({
+  metadata: metadataSchema,
+  authorization: z.object({
+    wallet: z.string().refine(isAddress),
+    signature: z.string().min(1).max(1024),
+    issuedAt: z.number().int().positive(),
+  }),
+});
+
 export interface ApiBlockchain extends RegistryReader {
   health(): Promise<BlockchainHealth>;
+  contractConfig(): Promise<IdentityContractConfig>;
+  getLifecycleEvents(agentId: string): Promise<IdentityLifecycleEvent[]>;
 }
 
 export interface AppDependencies {
@@ -43,6 +74,7 @@ export interface AppDependencies {
   interactionStore: InteractionStore;
   analytics: AnalyticsService;
   metadata: MetadataService;
+  demoWrites?: DemoIdentityWriteService;
   persistenceStatus: PersistenceStatus;
   frontendOrigins?: readonly string[];
 }
@@ -56,7 +88,7 @@ export function createApp(dependencies: AppDependencies) {
     if (requestOrigin && trustedOrigins.has(requestOrigin)) {
       response.setHeader("Access-Control-Allow-Origin", requestOrigin);
       response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-      response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
       response.setHeader("Vary", "Origin");
     }
     if (request.method === "OPTIONS") {
@@ -75,12 +107,29 @@ export function createApp(dependencies: AppDependencies) {
       blockchain,
       persistenceMode: dependencies.persistenceStatus.mode,
       supabaseConnected: dependencies.persistenceStatus.supabaseConnected,
+      demoSigningEnabled: dependencies.demoWrites?.isEnabled() ?? false,
       ...(dependencies.persistenceStatus.warning ? { persistenceWarning: dependencies.persistenceStatus.warning } : {}),
     });
   });
 
   app.get("/api/network", async (_request, response) => {
     response.json(await dependencies.blockchain.health());
+  });
+
+  app.get("/api/identity/config", async (_request, response) => {
+    response.json(await dependencies.blockchain.contractConfig());
+  });
+
+  app.get("/api/registry", async (_request, response) => {
+    const result = await dependencies.metadata.listWithStatus();
+    response.json({ agents: result.data, metadataAvailable: result.metadataAvailable, ...(result.warning ? { warning: result.warning } : {}) });
+  });
+
+  app.get("/api/registry/:agentId", async (request, response) => {
+    const result = await dependencies.metadata.getByAgentIdWithStatus(request.params.agentId);
+    response.status(result.data ? 200 : 404).json(result.data
+      ? { agent: result.data, metadataAvailable: result.metadataAvailable, ...(result.warning ? { warning: result.warning } : {}) }
+      : { code: "UNKNOWN_AGENT", reason: "No on-chain identity exists for that AgentID." });
   });
 
   app.get("/api/agents", async (_request, response) => {
@@ -94,6 +143,25 @@ export function createApp(dependencies: AppDependencies) {
     }
     const agent = await dependencies.blockchain.getAgentByWallet(request.params.address);
     response.status(agent ? 200 : 404).json(agent ? { agent } : { code: "UNKNOWN_WALLET" });
+  });
+
+  app.get("/api/agents/:agentId/availability", async (request, response) => {
+    const parsed = agentIdSchema.safeParse(request.params.agentId);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_AGENT_ID", reason: "Use uppercase letters, numbers, and hyphens." });
+      return;
+    }
+    const agent = await dependencies.blockchain.getAgent(parsed.data);
+    response.json({ agentId: parsed.data, available: !agent });
+  });
+
+  app.get("/api/agents/:agentId/events", async (request, response) => {
+    const agent = await dependencies.blockchain.getAgent(request.params.agentId);
+    if (!agent) {
+      response.status(404).json({ code: "UNKNOWN_AGENT", reason: "No on-chain identity exists for that AgentID." });
+      return;
+    }
+    response.json({ events: await dependencies.blockchain.getLifecycleEvents(request.params.agentId) });
   });
 
   app.get("/api/agents/:agentId", async (request, response) => {
@@ -166,6 +234,61 @@ export function createApp(dependencies: AppDependencies) {
     response.status(agent ? 200 : 404).json(agent ? { agent } : { code: "UNKNOWN_AGENT" });
   });
 
+  app.put("/api/metadata/agents/:agentId", async (request, response) => {
+    const parsed = authorizedMetadataSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_METADATA", reason: "Metadata or owner authorization is invalid." });
+      return;
+    }
+    const metadata = await dependencies.metadata.authorizedUpsert({ agentId: request.params.agentId, ...parsed.data.metadata }, parsed.data.authorization);
+    response.json({ metadata });
+  });
+
+  app.get("/api/demo/wallets", async (_request, response) => {
+    if (!dependencies.demoWrites) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo signing is not configured.", 403);
+    response.json({ wallets: await dependencies.demoWrites.listWallets(), developmentOnly: true });
+  });
+
+  app.post("/api/demo/identities", async (request, response) => {
+    if (!dependencies.demoWrites) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo signing is not configured.", 403);
+    const parsed = identityProfileSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_IDENTITY", reason: "Identity registration fields are invalid." });
+      return;
+    }
+    response.status(201).json(await dependencies.demoWrites.register(parsed.data.wallet, parsed.data));
+  });
+
+  app.put("/api/demo/identities/:agentId", async (request, response) => {
+    if (!dependencies.demoWrites) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo signing is not configured.", 403);
+    const parsed = identityProfileSchema.safeParse({ ...request.body, agentId: request.params.agentId });
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_IDENTITY", reason: "Identity update fields are invalid." });
+      return;
+    }
+    response.json(await dependencies.demoWrites.update(parsed.data.wallet, parsed.data));
+  });
+
+  app.post("/api/demo/identities/:agentId/revoke", async (request, response) => {
+    if (!dependencies.demoWrites) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo signing is not configured.", 403);
+    const parsed = lifecycleSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_ADDRESS", reason: "A valid demo wallet address is required." });
+      return;
+    }
+    response.json(await dependencies.demoWrites.revoke(parsed.data.wallet, request.params.agentId));
+  });
+
+  app.post("/api/demo/identities/:agentId/reactivate", async (request, response) => {
+    if (!dependencies.demoWrites) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo signing is not configured.", 403);
+    const parsed = lifecycleSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_ADDRESS", reason: "A valid demo wallet address is required." });
+      return;
+    }
+    response.json(await dependencies.demoWrites.reactivate(parsed.data.wallet, request.params.agentId));
+  });
+
   app.get("/api/security/scenarios", (_request, response) => {
     response.json({ scenarios: [
       { id: "VALID", expectedCode: "VERIFIED", description: "Registered active wallet signs an unchanged request." },
@@ -183,6 +306,10 @@ export function createApp(dependencies: AppDependencies) {
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     if (error instanceof SyntaxError && "body" in error) {
       response.status(400).json({ code: "INVALID_JSON", reason: "Request body contains malformed JSON." });
+      return;
+    }
+    if (error instanceof IdentityWriteError || error instanceof MetadataAuthorizationError) {
+      response.status(error.status).json({ code: error.code, reason: error.message });
       return;
     }
     const reason = error instanceof Error ? error.message : "Unexpected server error.";

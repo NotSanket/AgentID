@@ -1,6 +1,6 @@
 # AgentID Project Context
 
-This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 4 implementation on 2026-09-19. Future changes should update this document when the implemented architecture or verified results change.
+This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 5 implementation on 2026-09-19. Future changes should update this document when the implemented architecture or verified results change.
 
 ## Project Goal
 
@@ -24,11 +24,14 @@ The current implementation has these layers:
 - repository abstractions for audit events, replay nonces, verified interactions, and agent metadata;
 - official Supabase JavaScript client integration backed by PostgreSQL;
 - a complete in-memory persistence fallback;
-- analytics calculated from stored authentication and interaction records.
+- analytics calculated from stored authentication and interaction records;
 - a React, TypeScript, and Vite portal with a responsive premium interface;
-- a typed frontend health client connected to the existing backend API.
+- a typed frontend API client connected to the backend identity, health, authentication, audit, and analytics APIs;
+- browser-wallet writes through ethers `BrowserProvider`;
+- strictly guarded local-Hardhat demo writes for teaching and development;
+- a real Registry, Digital Agent Passport, identity issuance wizard, verification workspace, and live Command Center.
 
-The Stage 4 frontend foundation is implemented. Major product workflows such as live registration, registry data, verification, communication, security simulation, graph data, explorer data, and analytics charts intentionally remain Stage 5+ work. Supabase support is implemented and live persistence against the configured real project was verified on 2026-09-19.
+The Stage 5 core identity portal is implemented. Agent communication remains a Stage 6 module; security simulation, graph, explorer, and expanded analytics visualization remain later-stage work. Supabase support is implemented, and both Stage 3 persistence plus Stage 5 identity-metadata persistence were verified against the configured real project on 2026-09-19.
 
 ## Stage 1 — Blockchain Foundation
 
@@ -214,7 +217,7 @@ Reusable component foundations include:
 - modal, confirmation dialog, and side drawer with focus handling;
 - skeletons, empty states, reusable dashboard slots, notifications, and a safe error boundary.
 
-The frontend health client reads `VITE_API_BASE_URL` (default `http://localhost:4000`), requests `/api/health` with a five-second timeout, polls every 20 seconds, aborts on unmount, validates JSON parsing, and renders either real backend/blockchain/chain/persistence information or a graceful `SYSTEM OFFLINE` state. No Supabase server secret or blockchain private key exists in frontend configuration.
+The frontend API client reads `VITE_API_BASE_URL` (default `http://localhost:4000`). Identity/data requests have a bounded twelve-second timeout so first-load local registry scans and live Supabase analytics can settle; health polling remains independent and renders real backend/blockchain/chain/persistence information or a graceful `SYSTEM OFFLINE` state. Requests abort on unmount and validate JSON parsing. No Supabase server secret or blockchain private key exists in frontend configuration.
 
 Browser CORS is intentionally narrow. The backend reads the comma-separated `FRONTEND_ORIGINS` variable, which defaults to `http://localhost:5173,http://127.0.0.1:5173`. It returns cross-origin headers only for an exact configured origin and never uses a wildcard. This integration adds no changes to authentication, replay protection, Supabase persistence, or blockchain behavior.
 
@@ -228,6 +231,66 @@ Verified Stage 4 results:
 - **72 / 72 backend tests passing**: the preserved 68 Stage 1–3 backend tests plus 4 Stage 4 trusted-origin tests.
 
 Stage 4 intentionally does not provide fake live metrics or pretend that future product actions work. Conceptual example agent nodes appear only in the clearly labeled landing illustration.
+
+## Stage 5 - Core Agent Identity Portal
+
+Stage 5 is **COMPLETE**. It turns the Stage 4 shell into a working identity product while preserving the Stage 1-4 architecture.
+
+Implemented product routes:
+
+| Route | Stage 5 behavior |
+|---|---|
+| `/app` | Real registry counts, lifecycle activity, authentication analytics, audit activity, health, and quick actions |
+| `/app/register` | Five-step real identity issuance flow with browser-wallet and guarded local-demo modes |
+| `/app/registry` | Searchable, filterable, sortable live registry using on-chain state plus optional metadata |
+| `/app/registry/:agentId` | Digital Agent Passport, immutable lifecycle history, export/share/copy tools, and owner-gated lifecycle actions |
+| `/app/verification` | AgentID/wallet registry verification plus the existing EIP-712 signed-request verifier |
+
+Identity writes use one of two explicit modes:
+
+- **Browser wallet mode** uses `window.ethereum`, ethers `BrowserProvider`, the connected account, the configured chain, and the real `AgentRegistry` contract. The browser wallet signs and submits its own transactions.
+- **Local demo wallet mode** asks the backend to use an unlocked Hardhat account. It works only when `NODE_ENV=development`, `ENABLE_DEMO_SIGNING=true`, the configured and connected chain IDs are both `31337`, the RPC hostname is loopback, the registry is reachable, and the selected address is in the restricted Hardhat demo pool. The API returns labels, addresses, availability, assignments, and receipts - never private keys.
+
+The registration wizard collects profile metadata, generates or validates an AgentID, checks preliminary availability, selects a controlling wallet, shows a review, submits a real transaction, waits for a real receipt, and displays the confirmed hash/block. Supabase metadata is saved after the chain operation. A metadata failure does not falsify the blockchain result: the UI reports that synchronization needs attention and offers a retry.
+
+The Registry is reconstructed from `AgentRegistered` events and current contract records, then enriched with Supabase metadata when available. Blockchain identities remain visible if metadata storage is unavailable. The Digital Agent Passport includes owner, status, network, chain, contract, registration proof, and real Registered/Updated/Revoked/Reactivated events. Only the controlling selected/connected wallet is offered Update, Revoke, or Reactivate controls; the contract/backend ownership check remains authoritative.
+
+Stage 5 backend additions include:
+
+- registry and passport aggregation;
+- AgentID availability and lifecycle-event APIs;
+- contract configuration for browser-side ethers writes;
+- owner-authorized metadata updates using a fresh EIP-191 signature;
+- guarded local demo wallet listing and register/update/revoke/reactivate operations;
+- confirmed transaction receipt mapping;
+- current-wallet ownership checks and stable human-readable error codes.
+
+Verified Stage 5 automated results:
+
+- **16 Stage 5 backend tests** added;
+- **88 / 88 total backend tests passing** (the preserved 72 plus 16 Stage 5 tests);
+- **34 / 34 total frontend tests passing** (the preserved 15 plus 19 Stage 5 tests);
+- **31 / 31 Stage 1 blockchain tests passing**;
+- blockchain, backend, and frontend TypeScript checks passing;
+- Solidity compile passing;
+- Vite production build passing.
+
+### Real ResearchAI acceptance run
+
+A real end-to-end lifecycle was executed on local Hardhat chain `31337` against the real Supabase-backed backend. The deployed registry was `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0`; ResearchAI was controlled by local demo wallet `0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65`.
+
+| Operation | Block | Transaction hash | Observed result |
+|---|---:|---|---|
+| Register `AGT-RESEARCH-001` | 7 | `0x4c3b2e465c82b988c73079a0523ee965409b0ccce52130bcb08c97c9bc8567f3` | Active identity, wallet bound, metadata stored |
+| Update | 8 | `0xc81f4841bd7b4c450c3a79398948cf5bb473d261d3e86e1a26c75a6eb99db553` | Organization and metadata updated |
+| Revoke | 9 | `0xd3b1422b16dcddc09b8e10c4c79212115ebda9db665c100fea79cab16974ff44` | Registry and verification reported Revoked |
+| Reactivate | 10 | `0x05c33f1e7651b81a3f1f6f04ee6067efb2dfbf54c30e23fd66b18679ef04e8ad` | Registry and verification returned Active |
+
+The final Supabase-enriched profile contains category `Research` and capabilities `RESEARCH`, `SUMMARIZE`, and `CITE_SOURCES`. Browser verification displayed the real wallet, contract, chain, registration block, all four lifecycle events, and ACTIVE status. Public identity/config/demo-wallet responses were checked for secret or private-key fields and contained none.
+
+The owner-gated browser flow was then exercised once more: the portal confirmed revoke transaction `0xd7a557906f34c34e3a591afd0709c519f2bad0123202ad4dc23330ee646308e8` in block 11, the Verification page reported `IDENTITY REVOKED`, the portal confirmed reactivation transaction `0x3a44d99e761a2871269eab10ce7a540cacd831acec5a1e9edec731b0d60fa6d6` in block 12, and Verification returned `IDENTITY VERIFIED` with ACTIVE status.
+
+Responsive browser verification passed for the Command Center, registration wizard, Registry, Digital Agent Passport, and Verification pages at 1920, 1440, 1366, 1024, 768, and 390 CSS pixels with no document-level horizontal overflow.
 
 ## Important Security Model
 
@@ -261,6 +324,17 @@ These are the routes actually implemented in `backend/src/app.ts`:
 | `GET` | `/api/agents` | List identities discovered from `AgentRegistered` events and current registry records. |
 | `GET` | `/api/agents/wallet/:address` | Look up the AgentID registered to an Ethereum wallet. |
 | `GET` | `/api/agents/:agentId` | Look up a registry identity by readable AgentID. |
+| `GET` | `/api/identity/config` | Return public network, chain, registry address, and ABI data for browser-wallet writes. |
+| `GET` | `/api/registry` | Return all event-discovered identities enriched with metadata where available. |
+| `GET` | `/api/registry/:agentId` | Return one enriched Digital Agent Passport record. |
+| `GET` | `/api/agents/:agentId/availability` | Report preliminary AgentID availability. |
+| `GET` | `/api/agents/:agentId/events` | Return real registered/updated/revoked/reactivated contract events. |
+| `PUT` | `/api/metadata/agents/:agentId` | Update metadata with a fresh signature from the controlling wallet. |
+| `GET` | `/api/demo/wallets` | List safe local demo wallet labels, addresses, and availability when guarded demo signing is enabled. |
+| `POST` | `/api/demo/identities` | Register a real local-chain identity using an allowed unlocked demo wallet. |
+| `PUT` | `/api/demo/identities/:agentId` | Update owned on-chain fields when needed and synchronize metadata. |
+| `POST` | `/api/demo/identities/:agentId/revoke` | Revoke an identity controlled by the selected allowed local demo wallet. |
+| `POST` | `/api/demo/identities/:agentId/reactivate` | Reactivate an identity controlled by the selected allowed local demo wallet. |
 | `POST` | `/api/verify` | Authenticate a signed request without executing receiver behavior. |
 | `POST` | `/api/communication/send` | Authenticate a signed request and route it only if verification succeeds. |
 | `GET` | `/api/audit` | Return filtered, paginated authentication audit events. |
@@ -272,7 +346,7 @@ These are the routes actually implemented in `backend/src/app.ts`:
 | `GET` | `/api/metadata/agents/:agentId` | Return one enriched agent with live wallet and status. |
 | `GET` | `/api/security/scenarios` | Return descriptions and expected codes for the nine security scenarios. |
 
-There is no HTTP endpoint that signs arbitrary data.
+There is no HTTP endpoint that accepts private keys or signs arbitrary data. The local demo write endpoints expose only the narrowly defined AgentRegistry operations and are disabled unless every development guard passes.
 
 ## Current Data Storage
 
@@ -357,7 +431,14 @@ npm run build
 
 The development server uses `http://127.0.0.1:5173`. Copy `frontend/.env.example` to an untracked `frontend/.env` only when the backend base URL must be changed.
 
-The local end-to-end workflow is: keep `npm run node` running in one blockchain terminal, run `npm run demo:localhost` in a second terminal, then run the backend or `npm run demo:auth` from `backend/`.
+The local Stage 5 workflow is:
+
+1. Run `npm run node` in `blockchain/` and leave it running.
+2. Run `npm run deploy:localhost` and `npm run demo:localhost` in a second `blockchain/` terminal.
+3. In `backend/`, set `$env:NODE_ENV='development'` and `$env:ENABLE_DEMO_SIGNING='true'`, then run `npm run dev`. The flag is only for the local Hardhat teaching workflow.
+4. Run `npm run dev` in `frontend/` and open `http://127.0.0.1:5173/app`.
+
+Leave `ENABLE_DEMO_SIGNING` false or unset for every non-local environment. Browser-wallet mode does not require backend demo signing.
 
 ### Current Windows Workaround
 
@@ -389,18 +470,19 @@ Remove-Item Env:\LOCALAPPDATA -ErrorAction SilentlyContinue
 - Supabase requires the committed migration and metadata seed to be run manually for a new project.
 - A local Hardhat chain and all of its deployed contract state reset whenever that local chain is restarted. Run the localhost seed again and use the refreshed deployment manifest.
 - The demo uses unlocked local Hardhat accounts only. It must not be used with real funds.
+- The frontend production build currently emits a non-failing warning because the main JavaScript chunk is about 798 kB before gzip (about 261 kB gzip). Route-level code splitting is a later optimization; it does not affect Stage 5 correctness.
 
 ## Git Checkpoint
 
-The known-good Stage 2 checkpoint is:
+The known-good checkpoint immediately before Stage 5 is:
 
 ```text
-commit: 963cf64
-full commit: 963cf64fd9de89f56960b8065dbad6755ef06895
-message: AgentID Stage 2 complete
+commit: f35cef4
+full commit: f35cef496e8541213498d209f9a6329ee6dc4d6d
+message: Fix collapsed sidebar logo clipping
 ```
 
-This checkpoint was confirmed as the repository `HEAD` before this context document was added.
+The Stage 5 completion commit is the next checkpoint and uses message `AgentID Stage 5 core identity portal`.
 
 ## Stage 3 Status
 
@@ -431,15 +513,18 @@ The complete setup, migration, RLS, seeding, testing, and fallback instructions 
 
 ## Stage 4 Status
 
-Stage 4 is complete and provides the premium visual and interaction foundation. Its routes beyond the Command Center remain explicit placeholders until real backend workflows are connected. The frontend is currently a Vite single-page application, so a future deployment host must serve `index.html` as the fallback for nested client routes.
+Stage 4 is complete and provides the premium visual and interaction foundation. The frontend is currently a Vite single-page application, so a future deployment host must serve `index.html` as the fallback for nested client routes.
+
+## Stage 5 Status
+
+Stage 5 is complete. The core identity routes use real AgentRegistry state and real persisted metadata. Registration, update, revoke, and reactivation wait for actual transaction receipts. Verification reports Active, Revoked, or Not Found from authoritative registry data, and the advanced mode exposes the preserved Stage 2 signed-request verifier.
 
 ## Next Stage
 
-Stage 5 — Core AgentID Product Modules.
+Stage 6 - agent communication and an optional LLM layer.
 
 ## Future Stages
 
-- Stage 6 — agent communication and an optional LLM layer.
 - Stage 7 — Trust Graph, Security Lab, Explorer, and analytics.
 - Stage 8 — QA, edge cases, and polish.
 - Stage 9 — final demo and documentation.

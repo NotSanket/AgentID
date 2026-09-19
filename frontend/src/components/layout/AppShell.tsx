@@ -10,6 +10,7 @@ import { GlobalStatusBar } from "./GlobalStatusBar";
 import { MobileNavigation } from "./MobileNavigation";
 import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
+import { IdentitySessionProvider } from "../identity/IdentitySessionProvider";
 
 export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -28,6 +29,7 @@ export function AppShell() {
 
   return (
     <HealthProvider>
+      <IdentitySessionProvider>
       <div className="app-shell">
         <div className="ambient-grid" aria-hidden="true" />
         <Sidebar />
@@ -42,6 +44,7 @@ export function AppShell() {
         <SideDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} title="Notifications"><EmptyState title="No notifications yet" description="Identity, verification, and network events will appear here when their modules are connected." kind="activity" /></SideDrawer>
         <MobileNavigation open={mobileOpen} onClose={() => setMobileOpen(false)} />
       </div>
+      </IdentitySessionProvider>
     </HealthProvider>
   );
 }

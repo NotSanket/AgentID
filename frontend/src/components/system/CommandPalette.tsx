@@ -13,7 +13,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
-  const filtered = useMemo(() => commands.filter((item) => `${item.command} ${item.label}`.toLowerCase().includes(query.toLowerCase().trim())), [query]);
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toUpperCase();
+    const matches = commands.filter((item) => `${item.command} ${item.label}`.toLowerCase().includes(query.toLowerCase().trim()));
+    if (/^AGT-[A-Z0-9-]+$/.test(normalized)) {
+      return [{ label: normalized, command: `Open Agent Passport ${normalized}`, path: `/app/registry/${normalized}`, icon: Search }, ...matches];
+    }
+    return matches;
+  }, [query]);
 
   const run = (path: string) => { navigate(path); onClose(); };
 

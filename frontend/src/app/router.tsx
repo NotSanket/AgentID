@@ -5,6 +5,10 @@ import { LandingPage } from "../pages/LandingPage";
 import { ModulePlaceholderPage } from "../pages/ModulePlaceholderPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { SettingsPage } from "../pages/SettingsPage";
+import { RegisterAgentPage } from "../pages/RegisterAgentPage";
+import { RegistryPage } from "../pages/RegistryPage";
+import { AgentPassportPage } from "../pages/AgentPassportPage";
+import { VerificationPage } from "../pages/VerificationPage";
 
 export const routes: RouteObject[] = [
   { path: "/", element: <LandingPage /> },
@@ -13,11 +17,12 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <CommandCenterPage /> },
-      { path: "registry", element: <ModulePlaceholderPage module="Registry" stage="Stage 5" /> },
-      { path: "register", element: <ModulePlaceholderPage module="Register Agent" stage="Stage 5" /> },
-      { path: "verification", element: <ModulePlaceholderPage module="Verification" stage="Stage 5" /> },
-      { path: "communication", element: <ModulePlaceholderPage module="Communication" stage="Stage 5" /> },
-      { path: "security", element: <ModulePlaceholderPage module="Security Lab" stage="Stage 5" /> },
+      { path: "registry", element: <RegistryPage /> },
+      { path: "registry/:agentId", element: <AgentPassportPage /> },
+      { path: "register", element: <RegisterAgentPage /> },
+      { path: "verification", element: <VerificationPage /> },
+      { path: "communication", element: <ModulePlaceholderPage module="Communication" stage="Stage 6" /> },
+      { path: "security", element: <ModulePlaceholderPage module="Security Lab" stage="Stage 7" /> },
       { path: "trust-graph", element: <ModulePlaceholderPage module="Trust Graph" stage="Stage 7" /> },
       { path: "explorer", element: <ModulePlaceholderPage module="Explorer" stage="Stage 7" /> },
       { path: "analytics", element: <ModulePlaceholderPage module="Analytics" stage="Stage 7" /> },

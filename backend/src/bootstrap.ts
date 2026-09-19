@@ -7,6 +7,7 @@ import { AnalyticsService } from "./services/analytics-service.js";
 import { MetadataService } from "./services/metadata-service.js";
 import { createPersistence } from "./persistence/factory.js";
 import { createApp } from "./app.js";
+import { DemoIdentityWriteService } from "./services/identity-write-service.js";
 
 export async function bootstrap() {
   const config = loadRuntimeConfig();
@@ -22,6 +23,7 @@ export async function bootstrap() {
   const communication = new CommunicationService(authentication, router, persistence.interactionStore);
   const analytics = new AnalyticsService(persistence.auditStore, persistence.interactionStore, blockchain);
   const metadata = new MetadataService(blockchain, persistence.metadataStore);
+  const demoWrites = new DemoIdentityWriteService(blockchain, metadata, config);
   const app = createApp({
     blockchain,
     authentication,
@@ -30,6 +32,7 @@ export async function bootstrap() {
     interactionStore: persistence.interactionStore,
     analytics,
     metadata,
+    demoWrites,
     persistenceStatus: persistence.status,
     frontendOrigins: config.frontendOrigins,
   });
@@ -41,6 +44,7 @@ export async function bootstrap() {
     communication,
     analytics,
     metadata,
+    demoWrites,
     ...persistence,
   };
 }

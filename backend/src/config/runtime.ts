@@ -19,6 +19,7 @@ const environmentSchema = z.object({
   SUPABASE_URL: z.string().trim().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().trim().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  ENABLE_DEMO_SIGNING: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 });
 
 const manifestSchema = z.object({
@@ -45,6 +46,7 @@ export interface RuntimeConfig {
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
   nodeEnv: "development" | "test" | "production";
+  enableDemoSigning?: boolean;
 }
 
 export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env): RuntimeConfig {
@@ -82,5 +84,6 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
     supabaseUrl: env.SUPABASE_URL || undefined,
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || undefined,
     nodeEnv: env.NODE_ENV,
+    enableDemoSigning: env.ENABLE_DEMO_SIGNING,
   };
 }

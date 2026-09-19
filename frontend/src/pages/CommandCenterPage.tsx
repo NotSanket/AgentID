@@ -1,39 +1,61 @@
-import { ArrowRight, Bot, KeyRound, RadioTower, ShieldCheck, Sparkles } from "lucide-react";
+import { Activity, ArrowRight, Bot, Fingerprint, KeyRound, RadioTower, ShieldCheck, ShieldX, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSystemHealth } from "../components/system/HealthProvider";
 import { CardSkeleton, ComponentSlot, EmptyState } from "../components/ui/Feedback";
 import { StatusBadge } from "../components/ui/StatusBadge";
+import { apiClient } from "../lib/api-client";
+import type { AnalyticsSummary, AuditEvent, EnrichedAgent, IdentityLifecycleEvent } from "../types/api";
 
 export function CommandCenterPage() {
   const health = useSystemHealth();
+  const [agents, setAgents] = useState<EnrichedAgent[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [audit, setAudit] = useState<AuditEvent[]>([]);
+  const [lifecycle, setLifecycle] = useState<IdentityLifecycleEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const registry = await apiClient.registry(controller.signal);
+        setAgents(registry.agents);
+        setFailed(false);
+        setLoading(false);
+        const history = await Promise.all(registry.agents.map((agent) => apiClient.lifecycle(agent.agentId, controller.signal).then((result) => result.events).catch(() => [])));
+        setLifecycle(history.flat().sort((a, b) => b.blockNumber - a.blockNumber).slice(0, 6));
+        const [analyticsResult, auditResult] = await Promise.allSettled([apiClient.analytics(controller.signal), apiClient.audit(controller.signal)]);
+        if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
+        if (auditResult.status === "fulfilled") setAudit(auditResult.value.events);
+      } catch {
+        if (!controller.signal.aborted) setFailed(true);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, []);
+
+  const active = agents.filter((agent) => agent.status === "Active").length;
+  const revoked = agents.length - active;
   return (
-    <div className="page-stack command-center-page">
-      <section className="console-hero"><div><p className="eyebrow"><Sparkles size={13} /> Identity operations</p><h2>Command Center</h2><p>Your control surface for issuing, verifying, and monitoring agent identities. Live product modules connect in Stage 5.</p></div><div className="console-hero-mark"><ShieldCheck /><span>TRUST<br />BOUNDARY</span></div></section>
-
-      <section className="metric-grid" aria-label="System status">
-        {health.phase === "loading" ? <><CardSkeleton /><CardSkeleton /><CardSkeleton /></> : <>
-          <MetricStatus icon={RadioTower} label="Backend" value={health.phase === "online" ? "Connected" : "Offline"} tone={health.phase === "online" ? "active" : "offline"} detail={health.phase === "online" ? "Health endpoint responding" : "Start the backend to connect"} />
-          <MetricStatus icon={ShieldCheck} label="Blockchain" value={health.phase === "online" ? `Chain ${health.data.blockchain.chainId}` : "Unavailable"} tone={health.phase === "online" ? "verified" : "offline"} detail={health.phase === "online" ? health.data.blockchain.network : "No live values shown"} />
-          <MetricStatus icon={Bot} label="Persistence" value={health.phase === "online" ? health.data.persistenceMode : "Unavailable"} tone={health.phase === "online" ? "active" : "offline"} detail={health.phase === "online" ? "Reported by backend" : "Waiting for system health"} />
-        </>}
+    <div className="page-stack command-center-page stage5-page">
+      <section className="console-hero"><div><p className="eyebrow"><Sparkles size={13} /> Live identity operations</p><h2>Command Center</h2><p>Real AgentRegistry state, authentication analytics, and persisted security activity.</p></div><div className="console-hero-mark"><ShieldCheck /><span>TRUST<br />BOUNDARY</span></div></section>
+      <section className="metric-grid identity-metrics" aria-label="Live identity metrics">
+        {loading ? <><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></> : <><MetricStatus icon={Fingerprint} label="Registered Identities" value={String(agents.length)} tone="active" detail="Discovered from AgentRegistered events" /><MetricStatus icon={ShieldCheck} label="Active Identities" value={String(active)} tone="verified" detail="Current on-chain lifecycle state" /><MetricStatus icon={ShieldX} label="Revoked Identities" value={String(revoked)} tone={revoked ? "revoked" : "active"} detail="Rejected by authentication" /><MetricStatus icon={Activity} label="Verification Attempts" value={String(analytics?.totalVerificationAttempts ?? 0)} tone="verified" detail={`${analytics?.verifiedRequests ?? 0} verified · ${analytics?.blockedRequests ?? 0} blocked`} /></>}
       </section>
-
       <section className="dashboard-grid">
-        <ComponentSlot eyebrow="Verified operations" title="Recent activity">
-          <EmptyState title={health.phase === "online" ? "No activity loaded yet" : "Network unavailable"} description={health.phase === "online" ? "The activity feed will connect to verified backend records in Stage 5." : "Start the local blockchain and backend to restore live system status."} kind={health.phase === "online" ? "activity" : "network"} />
-        </ComponentSlot>
-        <ComponentSlot eyebrow="Safe next actions" title="Quick actions">
-          <div className="quick-actions"><QuickAction to="/app/register" icon={KeyRound} title="Register an agent" label="Stage 5 module" /><QuickAction to="/app/verification" icon={ShieldCheck} title="Verify identity" label="Stage 5 module" /><QuickAction to="/app/communication" icon={RadioTower} title="Send verified request" label="Stage 5 module" /></div>
-        </ComponentSlot>
-        <ComponentSlot eyebrow="Enforced controls" title="Security foundation">
-          <div className="security-status-list"><span><ShieldCheck /><span><strong>EIP-712 request binding</strong><small>Implemented in the backend</small></span><StatusBadge tone="verified" label="READY" /></span><span><ShieldCheck /><span><strong>Atomic nonce protection</strong><small>Persistent replay defense</small></span><StatusBadge tone="verified" label="READY" /></span><span><ShieldCheck /><span><strong>On-chain lifecycle checks</strong><small>Active and Revoked enforcement</small></span><StatusBadge tone="verified" label="READY" /></span></div>
-        </ComponentSlot>
+        <ComponentSlot eyebrow="Blockchain lifecycle" title="Recent identity activity">{failed ? <EmptyState kind="network" title="Identity activity unavailable" description="Start the local blockchain and backend to restore live records." /> : lifecycle.length ? <div className="activity-feed">{lifecycle.map((event) => <Link key={`${event.transactionHash}-${event.type}`} to={`/app/registry/${event.agentId}`}><span className={`activity-icon event-${event.type.toLowerCase()}`}><Fingerprint /></span><span><strong>{event.agentId} {event.type.toLowerCase()}</strong><small>Block {event.blockNumber} · {new Date(Number(event.timestamp) * 1000).toLocaleString()}</small></span><ArrowRight /></Link>)}</div> : <EmptyState title="No lifecycle events" description="Register an identity to create the first real blockchain event." kind="activity" />}</ComponentSlot>
+        <ComponentSlot eyebrow="Safe next actions" title="Quick actions"><div className="quick-actions"><QuickAction to="/app/register" icon={KeyRound} title="Register an agent" label="Issue on-chain identity" /><QuickAction to="/app/verification" icon={ShieldCheck} title="Verify identity" label="Read AgentRegistry state" /><QuickAction to="/app/registry" icon={Bot} title="Open Registry" label={`${agents.length} real identities`} /></div></ComponentSlot>
+        <ComponentSlot eyebrow="Persisted authentication audit" title="Recent security activity">{audit.length ? <div className="security-feed">{audit.map((event) => <div key={event.id}><StatusBadge tone={event.result === "VERIFIED" ? "verified" : "blocked"} label={event.code} /><span><strong>{event.senderAgentId ?? "Unknown sender"}</strong><small>{new Date(event.timestamp).toLocaleString()} · {event.reason}</small></span></div>)}</div> : <EmptyState title="No verification activity" description="Signed-request verification events will appear here from persistent audit storage." kind="activity" />}</ComponentSlot>
+        <ComponentSlot eyebrow="Current chain" title="Network health"><div className="health-detail-list"><span><RadioTower /><strong>Backend</strong><StatusBadge tone={health.phase === "online" ? "active" : "offline"} /></span><span><ShieldCheck /><strong>Blockchain</strong><code>{health.phase === "online" ? `Chain ${health.data.blockchain.chainId}` : "Unavailable"}</code></span><span><Bot /><strong>AgentRegistry</strong><code>{health.phase === "online" ? health.data.blockchain.registryAddress : "Unavailable"}</code></span><span><Activity /><strong>Persistence</strong><code>{health.phase === "online" ? health.data.persistenceMode : "Unavailable"}</code></span></div></ComponentSlot>
+        <ComponentSlot eyebrow="Lifecycle distribution" title="Identity status breakdown"><div className="status-breakdown"><div><span style={{ width: agents.length ? `${(active / agents.length) * 100}%` : "0%" }} /></div><p><span><i className="active-dot" /> Active <strong>{active}</strong></span><span><i className="revoked-dot" /> Revoked <strong>{revoked}</strong></span></p></div></ComponentSlot>
       </section>
     </div>
   );
 }
 
-function MetricStatus({ icon: Icon, label, value, detail, tone }: { icon: typeof Bot; label: string; value: string; detail: string; tone: "active" | "verified" | "offline" }) {
-  return <article className="metric-card"><header><span><Icon /></span><StatusBadge tone={tone} label={tone === "offline" ? "OFFLINE" : "LIVE"} /></header><p>{label}</p><strong>{value}</strong><small>{detail}</small></article>;
-}
+function MetricStatus({ icon: Icon, label, value, detail, tone }: { icon: typeof Bot; label: string; value: string; detail: string; tone: "active" | "verified" | "revoked" }) { return <article className="metric-card"><header><span><Icon /></span><StatusBadge tone={tone} label="LIVE" /></header><p>{label}</p><strong>{value}</strong><small>{detail}</small></article>; }
 function QuickAction({ to, icon: Icon, title, label }: { to: string; icon: typeof Bot; title: string; label: string }) { return <Link to={to}><span><Icon /></span><span><strong>{title}</strong><small>{label}</small></span><ArrowRight /></Link>; }
