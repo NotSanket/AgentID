@@ -1,6 +1,6 @@
 # AgentID Project Context
 
-This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 3 implementation on 2026-09-19. Future changes should update this document when the implemented architecture or verified results change.
+This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 4 implementation on 2026-09-19. Future changes should update this document when the implemented architecture or verified results change.
 
 ## Project Goal
 
@@ -25,8 +25,10 @@ The current implementation has these layers:
 - official Supabase JavaScript client integration backed by PostgreSQL;
 - a complete in-memory persistence fallback;
 - analytics calculated from stored authentication and interaction records.
+- a React, TypeScript, and Vite portal with a responsive premium interface;
+- a typed frontend health client connected to the existing backend API.
 
-The frontend has **not** been implemented. The `frontend/` directory contains only a placeholder README. Supabase support is implemented and live persistence against the configured real project was verified on 2026-09-19.
+The Stage 4 frontend foundation is implemented. Major product workflows such as live registration, registry data, verification, communication, security simulation, graph data, explorer data, and analytics charts intentionally remain Stage 5+ work. Supabase support is implemented and live persistence against the configured real project was verified on 2026-09-19.
 
 ## Stage 1 — Blockchain Foundation
 
@@ -167,6 +169,66 @@ Row Level Security is enabled on all tables. The migration creates no anonymous/
 - Replay persistence is security-critical. An unexpected replay-store failure blocks authentication with `SERVICE_UNAVAILABLE`.
 - A database unique-constraint error for an existing sender/nonce pair maps cleanly to `NONCE_REUSED`.
 
+## Stage 4 — Premium Frontend Foundation
+
+Stage 4 is **COMPLETE**. The application under `frontend/` uses:
+
+- React 19 and strict TypeScript;
+- Vite 8;
+- React Router with nested console routes;
+- Tailwind CSS 4 plus a CSS-variable design-token system;
+- Framer Motion for focused route, overlay, sidebar, hero, and microinteraction motion;
+- Lucide React icons;
+- local Manrope and JetBrains Mono variable fonts;
+- Vitest, jsdom, and Testing Library.
+
+The design system defines semantic background, surface, border, text, accent, success, warning, danger, and info colors plus consistent radius, shadow, blur, spacing, and transition tokens. It uses a dark AI-identity/security visual language with restrained electric-blue, cyan, violet, emerald, amber, and red state accents.
+
+Implemented public and console routes:
+
+| Route | Stage 4 behavior |
+|---|---|
+| `/` | Premium landing page with conceptual agent identity network and Register → Sign → Verify → Communicate story |
+| `/app` | Live-ready Command Center shell with real system health and honest empty states |
+| `/app/registry` | Intentional future-module placeholder |
+| `/app/register` | Intentional future-module placeholder |
+| `/app/verification` | Intentional future-module placeholder |
+| `/app/communication` | Intentional future-module placeholder |
+| `/app/security` | Intentional future-module placeholder |
+| `/app/trust-graph` | Intentional future-module placeholder |
+| `/app/explorer` | Intentional future-module placeholder |
+| `/app/analytics` | Intentional future-module placeholder |
+| `/app/documentation` | Intentional future-module placeholder |
+| `/app/settings` | Device-local visual preference foundation |
+| all unknown paths | Branded NotFound recovery page |
+
+The responsive application shell includes a top navbar, floating hover/click-expand sidebar, animated active-route indicator, mobile drawer navigation, notification/toast infrastructure, global status bar, keyboard-accessible command palette, and restrained route transitions. `Ctrl/Cmd + K` opens the command palette; filtering, Arrow Up/Down, Enter, Escape, focus restoration, and focus containment are implemented.
+
+Reusable component foundations include:
+
+- `AgentCard` and the digital `AgentPassport` credential;
+- Verified, Active, Revoked, Blocked, Pending, and Offline badges;
+- wallet, transaction hash, AgentID, block-number, and copy components;
+- primary, secondary, ghost, danger, success, and technical buttons with loading state;
+- text input, textarea, select, search, toggle, checkbox, field, and validation components;
+- modal, confirmation dialog, and side drawer with focus handling;
+- skeletons, empty states, reusable dashboard slots, notifications, and a safe error boundary.
+
+The frontend health client reads `VITE_API_BASE_URL` (default `http://localhost:4000`), requests `/api/health` with a five-second timeout, polls every 20 seconds, aborts on unmount, validates JSON parsing, and renders either real backend/blockchain/chain/persistence information or a graceful `SYSTEM OFFLINE` state. No Supabase server secret or blockchain private key exists in frontend configuration.
+
+Browser CORS is intentionally narrow. The backend reads the comma-separated `FRONTEND_ORIGINS` variable, which defaults to `http://localhost:5173,http://127.0.0.1:5173`. It returns cross-origin headers only for an exact configured origin and never uses a wildcard. This integration adds no changes to authentication, replay protection, Supabase persistence, or blockchain behavior.
+
+Verified Stage 4 results:
+
+- **15 / 15 frontend tests passing** across rendering, landing content, routing, placeholders, sidebar behavior, command palette, mobile navigation, technical-value copying, online/offline health, reusable components, and error recovery;
+- frontend strict TypeScript typecheck passing;
+- Vite production build passing;
+- live browser verification passing for `/` and `/app`, including chain ID `31337`, trusted-origin CORS, palette routing, mobile navigation, and no console errors;
+- no horizontal overflow at 1920, 1440, 1366, 1024, 768, or 390 CSS pixels;
+- **72 / 72 backend tests passing**: the preserved 68 Stage 1–3 backend tests plus 4 Stage 4 trusted-origin tests.
+
+Stage 4 intentionally does not provide fake live metrics or pretend that future product actions work. Conceptual example agent nodes appear only in the clearly labeled landing illustration.
+
 ## Important Security Model
 
 A registered identity alone is not enough because anybody can place an AgentID string in JSON. A request must also prove control of the associated wallet.
@@ -281,6 +343,20 @@ The commands correspond to:
 - authentication demo: `tsx src/demo/auth-demo.ts`.
 - demo metadata seed: `tsx src/scripts/seed-data.ts`.
 
+### Frontend
+
+```powershell
+cd "C:\BlockChain Project67\frontend"
+
+npm install
+npm run dev
+npm run typecheck
+npm test
+npm run build
+```
+
+The development server uses `http://127.0.0.1:5173`. Copy `frontend/.env.example` to an untracked `frontend/.env` only when the backend base URL must be changed.
+
 The local end-to-end workflow is: keep `npm run node` running in one blockchain terminal, run `npm run demo:localhost` in a second terminal, then run the backend or `npm run demo:auth` from `backend/`.
 
 ### Current Windows Workaround
@@ -306,6 +382,7 @@ Remove-Item Env:\LOCALAPPDATA -ErrorAction SilentlyContinue
 - The current Windows/Codex host needs `.tools/node-userinfo-workaround.cjs` for the Node `os.userInfo()` failure described above.
 - Hardhat commands on this host use `.tools/localappdata` to avoid the unavailable or stale user-profile compiler cache.
 - Live Supabase access on this host needs Node's `--use-system-ca` option; without it, the startup health check fails closed to `IN_MEMORY` mode.
+- Browser access to the backend is restricted to `FRONTEND_ORIGINS`; add an explicit deployment origin before serving the frontend from another host.
 - Git is initialized. In the current Codex shell, Git is installed at `C:\Program Files\Git\cmd\git.exe` but is not on `PATH`, so automation may need to invoke that full path.
 - In `IN_MEMORY` mode, replay nonces, audit events, and interactions reset whenever the backend restarts.
 - Supabase integration is covered by automated tests and live persistence was verified against the configured real project on 2026-09-19.
@@ -352,13 +429,16 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 The complete setup, migration, RLS, seeding, testing, and fallback instructions are in `docs/SUPABASE.md`.
 
+## Stage 4 Status
+
+Stage 4 is complete and provides the premium visual and interaction foundation. Its routes beyond the Command Center remain explicit placeholders until real backend workflows are connected. The frontend is currently a Vite single-page application, so a future deployment host must serve `index.html` as the fallback for nested client routes.
+
 ## Next Stage
 
-Stage 4 — premium frontend and design system.
+Stage 5 — Core AgentID Product Modules.
 
 ## Future Stages
 
-- Stage 5 — core AgentID UI modules.
 - Stage 6 — agent communication and an optional LLM layer.
 - Stage 7 — Trust Graph, Security Lab, Explorer, and analytics.
 - Stage 8 — QA, edge cases, and polish.

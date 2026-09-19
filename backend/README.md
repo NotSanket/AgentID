@@ -17,6 +17,8 @@ npm run dev
 
 The default server is `http://127.0.0.1:4000`. `AGENT_REGISTRY_ADDRESS` can override the manifest address, but no old address is embedded in source code. Without complete Supabase credentials the backend logs `Persistence mode: IN_MEMORY` and remains fully usable.
 
+Stage 4 browser access uses an explicit trusted-origin allowlist. `FRONTEND_ORIGINS` is a comma-separated list and defaults to the two local Vite origins `http://localhost:5173,http://127.0.0.1:5173`. Unlisted origins receive no cross-origin permission. Keep production origins explicit rather than using a wildcard.
+
 To enable persistent storage, apply `supabase/migrations/202609190001_stage3_persistence.sql` and configure the server-only variables described in `docs/SUPABASE.md`. Never expose the server key to frontend code.
 
 ## API

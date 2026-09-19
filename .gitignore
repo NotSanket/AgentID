@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+frontend/dist/
 blockchain/node_modules/
 .tools/
 .npm-cache/

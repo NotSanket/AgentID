@@ -2,7 +2,7 @@
 
 **A blockchain-based identity and request-authentication framework for collaborative AI agents.**
 
-Stage 1 binds a readable AgentID to an Ethereum wallet and records whether the identity is Active or Revoked. Stage 2 adds EIP-712 authentication and authenticated routing. Stage 3 adds optional Supabase/PostgreSQL persistence for off-chain application data while preserving a complete in-memory fallback.
+Stage 1 binds a readable AgentID to an Ethereum wallet and records whether the identity is Active or Revoked. Stage 2 adds EIP-712 authentication and authenticated routing. Stage 3 adds optional Supabase/PostgreSQL persistence for off-chain application data while preserving a complete in-memory fallback. Stage 4 adds the premium React portal foundation.
 
 Identity verification does not prove that an agent is safe, truthful, intelligent, or well behaved.
 
@@ -19,9 +19,11 @@ Identity verification does not prove that an agent is safe, truthful, intelligen
 - filtered/paginated history APIs and real stored-data analytics;
 - offline deterministic TravelAI, HotelAI, and PaymentAI handlers;
 - REST endpoints, 39 preserved Stage 2 tests, and 29 Stage 3 tests;
-- real local authentication terminal demo.
+- real local authentication terminal demo;
+- premium React, TypeScript, Vite, Tailwind CSS, and Framer Motion frontend;
+- responsive landing page, console shell, command palette, reusable identity components, and live health status.
 
-There is no frontend or LLM integration yet. Supabase remains optional, and live persistence against the configured real project was verified on 2026-09-19, including persistence across a backend-only restart and replay blocking from the stored nonce.
+Stage 4 is a visual and application-shell foundation; the major identity workflows connect in Stage 5. There is no LLM integration. Supabase remains optional, and live persistence against the configured real project was verified on 2026-09-19, including persistence across a backend-only restart and replay blocking from the stored nonce.
 
 ## Prerequisites
 
@@ -61,7 +63,17 @@ npm run dev
 
 The API starts at `http://127.0.0.1:4000`. Check `GET /api/health` before sending requests. With the default environment it reports `persistenceMode: IN_MEMORY`. See [the Supabase guide](docs/SUPABASE.md) to enable persistent mode.
 
-### Terminal 4 — authentication demo
+### Terminal 4 — frontend
+
+```powershell
+cd "C:\BlockChain Project67\frontend"
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. The landing page is `/` and the console is `/app`. When the backend or blockchain is unavailable, the console reports an intentional offline state.
+
+### Terminal 5 — authentication demo
 
 ```powershell
 cd "C:\BlockChain Project67\backend"
@@ -80,9 +92,14 @@ npm test
 cd "C:\BlockChain Project67\backend"
 npm run typecheck
 npm test
+
+cd "C:\BlockChain Project67\frontend"
+npm run typecheck
+npm test
+npm run build
 ```
 
-Expected results are 31 blockchain tests and 68 backend tests: the original 39 Stage 2 tests plus 29 Stage 3 tests.
+Expected results are 31 blockchain tests, 72 backend tests (the original 68 plus 4 Stage 4 trusted-origin tests), and 15 Stage 4 frontend tests.
 
 ## REST endpoints
 

@@ -44,11 +44,27 @@ export interface AppDependencies {
   analytics: AnalyticsService;
   metadata: MetadataService;
   persistenceStatus: PersistenceStatus;
+  frontendOrigins?: readonly string[];
 }
 
 export function createApp(dependencies: AppDependencies) {
   const app = express();
   app.disable("x-powered-by");
+  app.use((request, response, next) => {
+    const trustedOrigins = new Set(dependencies.frontendOrigins ?? ["http://localhost:5173", "http://127.0.0.1:5173"]);
+    const requestOrigin = request.headers.origin;
+    if (requestOrigin && trustedOrigins.has(requestOrigin)) {
+      response.setHeader("Access-Control-Allow-Origin", requestOrigin);
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      response.setHeader("Vary", "Origin");
+    }
+    if (request.method === "OPTIONS") {
+      response.sendStatus(204);
+      return;
+    }
+    next();
+  });
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/api/health", async (_request, response) => {

@@ -31,6 +31,7 @@ export async function bootstrap() {
     analytics,
     metadata,
     persistenceStatus: persistence.status,
+    frontendOrigins: config.frontendOrigins,
   });
   return {
     app,
