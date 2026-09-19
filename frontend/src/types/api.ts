@@ -130,4 +130,109 @@ export interface AuditEvent {
   result: "VERIFIED" | "BLOCKED";
   code: string;
   reason: string;
+  requestId?: string;
+  action?: string;
+  recoveredWallet?: string;
+  registeredWallet?: string;
 }
+
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+export interface AgentRequest {
+  requestId: string;
+  senderAgentId: string;
+  receiverAgentId: string;
+  action: string;
+  payload: JsonValue;
+  timestamp: number;
+  nonce: string;
+}
+
+export interface PreparedCommunication {
+  request: AgentRequest;
+  typedData: {
+    domain: { name: string; version: string; chainId: number; verifyingContract: string };
+    types: Record<string, { name: string; type: string }[]>;
+    primaryType: "AgentRequest";
+    message: Record<string, string | number>;
+    payloadHash: string;
+  };
+}
+
+export interface AuthenticationChecks {
+  signatureValid: boolean;
+  senderExists: boolean;
+  receiverExists: boolean;
+  receiverActive: boolean;
+  walletMatches: boolean;
+  identityActive: boolean;
+  timestampValid: boolean;
+  nonceUnused: boolean;
+}
+
+export interface AuthenticationResult {
+  verified: boolean;
+  code: string;
+  reason: string;
+  senderAgentId?: string;
+  receiverAgentId?: string;
+  recoveredWallet?: string;
+  registeredWallet?: string;
+  operationalWarnings?: string[];
+  checks: AuthenticationChecks;
+}
+
+export interface AgentResponse {
+  success: boolean;
+  source: string;
+  receiverAgentId: string;
+  action: string;
+  data: JsonValue;
+}
+
+export interface InteractionRecord {
+  id: string;
+  requestId: string;
+  senderAgentId: string;
+  receiverAgentId: string;
+  action: string;
+  requestPayload: JsonValue;
+  responsePayload: JsonValue;
+  authenticationCode: string;
+  durationMs: number;
+  createdAt: string;
+}
+
+export interface CommunicationResult {
+  request?: AgentRequest;
+  signature?: string;
+  requestId?: string;
+  senderAgentId?: string;
+  receiverAgentId?: string;
+  action?: string;
+  timestamp?: number;
+  nonce?: string;
+  delivered: boolean;
+  receiverExecuted: boolean;
+  verification: AuthenticationResult;
+  response?: AgentResponse;
+  interaction?: InteractionRecord;
+  operationalWarnings?: string[];
+}
+
+export interface DemoCommunicationAgent {
+  label: string;
+  agentId: string;
+  name: string;
+  organization: string;
+  address: string;
+  status: AgentStatus;
+  supportedActions: string[];
+}
+
+export interface CommunicationCapabilities {
+  handlers: Record<string, string[]>;
+  source: "DETERMINISTIC_DEMO_HANDLERS";
+}
+
+export interface Pagination { total: number; limit: number; offset: number }

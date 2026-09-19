@@ -6,6 +6,7 @@ export type AuditEventType =
   | "UNKNOWN_WALLET_BLOCKED"
   | "UNKNOWN_AGENT_BLOCKED"
   | "UNKNOWN_RECEIVER_BLOCKED"
+  | "RECEIVER_REVOKED_BLOCKED"
   | "IMPERSONATION_BLOCKED"
   | "REVOKED_AGENT_BLOCKED"
   | "REPLAY_BLOCKED"
@@ -35,6 +36,7 @@ export interface AuditListQuery {
   offset: number;
   result?: "VERIFIED" | "BLOCKED";
   code?: string;
+  requestId?: string;
   senderAgentId?: string;
   receiverAgentId?: string;
 }
@@ -71,6 +73,7 @@ export class InMemoryAuditStore implements AuditStore {
     const filtered = [...this.events].reverse().filter((event) =>
       (!query.result || event.result === query.result) &&
       (!query.code || event.code === query.code) &&
+      (!query.requestId || event.requestId === query.requestId) &&
       (!query.senderAgentId || event.senderAgentId === query.senderAgentId) &&
       (!query.receiverAgentId || event.receiverAgentId === query.receiverAgentId));
     return {

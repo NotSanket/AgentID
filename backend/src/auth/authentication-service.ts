@@ -12,6 +12,7 @@ export type AuthenticationCode =
   | "UNKNOWN_WALLET"
   | "UNKNOWN_AGENT"
   | "UNKNOWN_RECEIVER"
+  | "RECEIVER_REVOKED"
   | "WALLET_MISMATCH"
   | "AGENT_REVOKED"
   | "REQUEST_EXPIRED"
@@ -22,6 +23,7 @@ export interface AuthenticationChecks {
   signatureValid: boolean;
   senderExists: boolean;
   receiverExists: boolean;
+  receiverActive: boolean;
   walletMatches: boolean;
   identityActive: boolean;
   timestampValid: boolean;
@@ -50,6 +52,7 @@ const emptyChecks = (): AuthenticationChecks => ({
   signatureValid: false,
   senderExists: false,
   receiverExists: false,
+  receiverActive: false,
   walletMatches: false,
   identityActive: false,
   timestampValid: false,
@@ -78,6 +81,10 @@ export class AuthenticationService {
         return this.finish(request, this.reject("UNKNOWN_RECEIVER", "Receiver AgentID is not registered.", checks));
       }
       checks.receiverExists = true;
+      checks.receiverActive = receiver.status === "Active";
+      if (!checks.receiverActive) {
+        return this.finish(request, this.reject("RECEIVER_REVOKED", "Receiver identity is revoked on-chain.", checks));
+      }
 
       let recoveredWallet: string;
       try {
@@ -163,6 +170,7 @@ export class AuthenticationService {
       UNKNOWN_WALLET: "UNKNOWN_WALLET_BLOCKED",
       UNKNOWN_AGENT: "UNKNOWN_AGENT_BLOCKED",
       UNKNOWN_RECEIVER: "UNKNOWN_RECEIVER_BLOCKED",
+      RECEIVER_REVOKED: "RECEIVER_REVOKED_BLOCKED",
       WALLET_MISMATCH: "IMPERSONATION_BLOCKED",
       AGENT_REVOKED: "REVOKED_AGENT_BLOCKED",
       NONCE_REUSED: "REPLAY_BLOCKED",

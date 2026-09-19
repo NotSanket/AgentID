@@ -2,7 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { isAddress } from "ethers";
 import { z } from "zod";
 import type { AuthenticationService } from "./auth/authentication-service.js";
-import { signedRequestSchema } from "./auth/request-schema.js";
+import { communicationDraftSchema, demoCommunicationSchema, signedRequestSchema } from "./auth/request-schema.js";
 import type { CommunicationService } from "./services/communication-service.js";
 import type { AuditStore } from "./stores/audit-store.js";
 import type { RegistryReader } from "./domain/types.js";
@@ -12,6 +12,8 @@ import type { InteractionStore, PersistenceStatus } from "./persistence/types.js
 import type { AnalyticsService } from "./services/analytics-service.js";
 import { MetadataAuthorizationError, type MetadataService } from "./services/metadata-service.js";
 import { DemoIdentityWriteService, IdentityWriteError } from "./services/identity-write-service.js";
+import { DEMO_RECEIVER_ACTIONS, type DemoCommunicationService } from "./services/demo-communication-service.js";
+import type { CommunicationPreparationService } from "./services/communication-preparation-service.js";
 
 const paginationFields = {
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -22,6 +24,7 @@ const auditQuerySchema = z.object({
   ...paginationFields,
   result: z.enum(["VERIFIED", "BLOCKED"]).optional(),
   code: z.string().trim().min(1).max(64).optional(),
+  requestId: z.string().trim().min(1).max(128).optional(),
   senderAgentId: z.string().trim().min(1).max(64).optional(),
   receiverAgentId: z.string().trim().min(1).max(64).optional(),
 });
@@ -70,11 +73,13 @@ export interface AppDependencies {
   blockchain: ApiBlockchain;
   authentication: AuthenticationService;
   communication: CommunicationService;
+  communicationPreparation?: CommunicationPreparationService;
   auditStore: AuditStore;
   interactionStore: InteractionStore;
   analytics: AnalyticsService;
   metadata: MetadataService;
   demoWrites?: DemoIdentityWriteService;
+  demoCommunication?: DemoCommunicationService;
   persistenceStatus: PersistenceStatus;
   frontendOrigins?: readonly string[];
 }
@@ -185,6 +190,23 @@ export function createApp(dependencies: AppDependencies) {
     response.status(result.delivered ? 200 : 403).json(result);
   });
 
+  app.get("/api/communication/capabilities", (_request, response) => {
+    response.json({ handlers: DEMO_RECEIVER_ACTIONS, source: "DETERMINISTIC_DEMO_HANDLERS" });
+  });
+
+  app.post("/api/communication/prepare", (request, response) => {
+    if (!dependencies.communicationPreparation) {
+      response.status(503).json({ code: "SERVICE_UNAVAILABLE", reason: "Communication preparation is unavailable." });
+      return;
+    }
+    const parsed = communicationDraftSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_REQUEST", reason: "Communication draft fields are invalid." });
+      return;
+    }
+    response.status(201).json(dependencies.communicationPreparation.prepare(parsed.data));
+  });
+
   app.get("/api/audit", async (request, response) => {
     const parsed = auditQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -247,6 +269,22 @@ export function createApp(dependencies: AppDependencies) {
   app.get("/api/demo/wallets", async (_request, response) => {
     if (!dependencies.demoWrites) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo signing is not configured.", 403);
     response.json({ wallets: await dependencies.demoWrites.listWallets(), developmentOnly: true });
+  });
+
+  app.get("/api/demo/communication/agents", async (_request, response) => {
+    if (!dependencies.demoCommunication) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo communication signing is not configured.", 403);
+    response.json({ agents: await dependencies.demoCommunication.listAgents(), developmentOnly: true });
+  });
+
+  app.post("/api/demo/communication/send", async (request, response) => {
+    if (!dependencies.demoCommunication) throw new IdentityWriteError("DEMO_SIGNING_DISABLED", "Local demo communication signing is not configured.", 403);
+    const parsed = demoCommunicationSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_REQUEST", reason: "A valid local demo wallet and AgentRequest are required." });
+      return;
+    }
+    const result = await dependencies.demoCommunication.signAndSend(parsed.data.wallet, parsed.data.request);
+    response.status(result.delivered ? 200 : 403).json(result);
   });
 
   app.post("/api/demo/identities", async (request, response) => {

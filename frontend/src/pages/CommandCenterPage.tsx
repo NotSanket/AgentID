@@ -5,56 +5,35 @@ import { useSystemHealth } from "../components/system/HealthProvider";
 import { CardSkeleton, ComponentSlot, EmptyState } from "../components/ui/Feedback";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { apiClient } from "../lib/api-client";
-import type { AnalyticsSummary, AuditEvent, EnrichedAgent, IdentityLifecycleEvent } from "../types/api";
+import type { AnalyticsSummary, AuditEvent, EnrichedAgent, IdentityLifecycleEvent, InteractionRecord } from "../types/api";
 
 export function CommandCenterPage() {
   const health = useSystemHealth();
-  const [agents, setAgents] = useState<EnrichedAgent[]>([]);
-  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
-  const [audit, setAudit] = useState<AuditEvent[]>([]);
-  const [lifecycle, setLifecycle] = useState<IdentityLifecycleEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
+  const [agents, setAgents] = useState<EnrichedAgent[]>([]); const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null); const [audit, setAudit] = useState<AuditEvent[]>([]); const [lifecycle, setLifecycle] = useState<IdentityLifecycleEvent[]>([]); const [interactions, setInteractions] = useState<InteractionRecord[]>([]); const [loading, setLoading] = useState(true); const [failed, setFailed] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
       try {
-        const registry = await apiClient.registry(controller.signal);
-        setAgents(registry.agents);
-        setFailed(false);
-        setLoading(false);
-        const history = await Promise.all(registry.agents.map((agent) => apiClient.lifecycle(agent.agentId, controller.signal).then((result) => result.events).catch(() => [])));
-        setLifecycle(history.flat().sort((a, b) => b.blockNumber - a.blockNumber).slice(0, 6));
-        const [analyticsResult, auditResult] = await Promise.allSettled([apiClient.analytics(controller.signal), apiClient.audit(controller.signal)]);
-        if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
-        if (auditResult.status === "fulfilled") setAudit(auditResult.value.events);
-      } catch {
-        if (!controller.signal.aborted) setFailed(true);
-      } finally {
-        setLoading(false);
-      }
-    })();
-    return () => controller.abort();
+        const registry = await apiClient.registry(controller.signal); setAgents(registry.agents); setFailed(false); setLoading(false);
+        const history = await Promise.all(registry.agents.map((agent) => apiClient.lifecycle(agent.agentId, controller.signal).then((result) => result.events).catch(() => []))); setLifecycle(history.flat().sort((a, b) => b.blockNumber - a.blockNumber).slice(0, 6));
+        const [analyticsResult, auditResult, interactionResult] = await Promise.allSettled([apiClient.analytics(controller.signal), apiClient.audit(controller.signal), apiClient.interactions({ limit: 5, offset: 0 }, controller.signal)]);
+        if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value); if (auditResult.status === "fulfilled") setAudit(auditResult.value.events); if (interactionResult.status === "fulfilled") setInteractions(interactionResult.value.interactions);
+      } catch { if (!controller.signal.aborted) setFailed(true); } finally { setLoading(false); }
+    })(); return () => controller.abort();
   }, []);
-
-  const active = agents.filter((agent) => agent.status === "Active").length;
-  const revoked = agents.length - active;
-  return (
-    <div className="page-stack command-center-page stage5-page">
-      <section className="console-hero"><div><p className="eyebrow"><Sparkles size={13} /> Live identity operations</p><h2>Command Center</h2><p>Real AgentRegistry state, authentication analytics, and persisted security activity.</p></div><div className="console-hero-mark"><ShieldCheck /><span>TRUST<br />BOUNDARY</span></div></section>
-      <section className="metric-grid identity-metrics" aria-label="Live identity metrics">
-        {loading ? <><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></> : <><MetricStatus icon={Fingerprint} label="Registered Identities" value={String(agents.length)} tone="active" detail="Discovered from AgentRegistered events" /><MetricStatus icon={ShieldCheck} label="Active Identities" value={String(active)} tone="verified" detail="Current on-chain lifecycle state" /><MetricStatus icon={ShieldX} label="Revoked Identities" value={String(revoked)} tone={revoked ? "revoked" : "active"} detail="Rejected by authentication" /><MetricStatus icon={Activity} label="Verification Attempts" value={String(analytics?.totalVerificationAttempts ?? 0)} tone="verified" detail={`${analytics?.verifiedRequests ?? 0} verified · ${analytics?.blockedRequests ?? 0} blocked`} /></>}
-      </section>
-      <section className="dashboard-grid">
-        <ComponentSlot eyebrow="Blockchain lifecycle" title="Recent identity activity">{failed ? <EmptyState kind="network" title="Identity activity unavailable" description="Start the local blockchain and backend to restore live records." /> : lifecycle.length ? <div className="activity-feed">{lifecycle.map((event) => <Link key={`${event.transactionHash}-${event.type}`} to={`/app/registry/${event.agentId}`}><span className={`activity-icon event-${event.type.toLowerCase()}`}><Fingerprint /></span><span><strong>{event.agentId} {event.type.toLowerCase()}</strong><small>Block {event.blockNumber} · {new Date(Number(event.timestamp) * 1000).toLocaleString()}</small></span><ArrowRight /></Link>)}</div> : <EmptyState title="No lifecycle events" description="Register an identity to create the first real blockchain event." kind="activity" />}</ComponentSlot>
-        <ComponentSlot eyebrow="Safe next actions" title="Quick actions"><div className="quick-actions"><QuickAction to="/app/register" icon={KeyRound} title="Register an agent" label="Issue on-chain identity" /><QuickAction to="/app/verification" icon={ShieldCheck} title="Verify identity" label="Read AgentRegistry state" /><QuickAction to="/app/registry" icon={Bot} title="Open Registry" label={`${agents.length} real identities`} /></div></ComponentSlot>
-        <ComponentSlot eyebrow="Persisted authentication audit" title="Recent security activity">{audit.length ? <div className="security-feed">{audit.map((event) => <div key={event.id}><StatusBadge tone={event.result === "VERIFIED" ? "verified" : "blocked"} label={event.code} /><span><strong>{event.senderAgentId ?? "Unknown sender"}</strong><small>{new Date(event.timestamp).toLocaleString()} · {event.reason}</small></span></div>)}</div> : <EmptyState title="No verification activity" description="Signed-request verification events will appear here from persistent audit storage." kind="activity" />}</ComponentSlot>
-        <ComponentSlot eyebrow="Current chain" title="Network health"><div className="health-detail-list"><span><RadioTower /><strong>Backend</strong><StatusBadge tone={health.phase === "online" ? "active" : "offline"} /></span><span><ShieldCheck /><strong>Blockchain</strong><code>{health.phase === "online" ? `Chain ${health.data.blockchain.chainId}` : "Unavailable"}</code></span><span><Bot /><strong>AgentRegistry</strong><code>{health.phase === "online" ? health.data.blockchain.registryAddress : "Unavailable"}</code></span><span><Activity /><strong>Persistence</strong><code>{health.phase === "online" ? health.data.persistenceMode : "Unavailable"}</code></span></div></ComponentSlot>
-        <ComponentSlot eyebrow="Lifecycle distribution" title="Identity status breakdown"><div className="status-breakdown"><div><span style={{ width: agents.length ? `${(active / agents.length) * 100}%` : "0%" }} /></div><p><span><i className="active-dot" /> Active <strong>{active}</strong></span><span><i className="revoked-dot" /> Revoked <strong>{revoked}</strong></span></p></div></ComponentSlot>
-      </section>
-    </div>
-  );
+  const active = agents.filter((agent) => agent.status === "Active").length; const revoked = agents.length - active;
+  return <div className="page-stack command-center-page stage5-page">
+    <section className="console-hero"><div><p className="eyebrow"><Sparkles size={13} /> Live identity operations</p><h2>Command Center</h2><p>Real AgentRegistry state, authenticated communication, and persisted security activity.</p></div><div className="console-hero-mark"><ShieldCheck /><span>TRUST<br />BOUNDARY</span></div></section>
+    <section className="metric-grid identity-metrics" aria-label="Live identity metrics">{loading ? <><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></> : <><MetricStatus icon={Fingerprint} label="Registered Identities" value={String(agents.length)} tone="active" detail="Discovered from AgentRegistered events" /><MetricStatus icon={ShieldCheck} label="Active Identities" value={String(active)} tone="verified" detail="Current on-chain lifecycle state" /><MetricStatus icon={ShieldX} label="Revoked Identities" value={String(revoked)} tone={revoked ? "revoked" : "active"} detail="Rejected by authentication" /><MetricStatus icon={Activity} label="Verification Attempts" value={String(analytics?.totalVerificationAttempts ?? 0)} tone="verified" detail={`${analytics?.verifiedRequests ?? 0} verified · ${analytics?.blockedRequests ?? 0} blocked`} /><MetricStatus icon={RadioTower} label="Verified Interactions" value={String(analytics?.totalInteractions ?? 0)} tone="verified" detail="Authenticated receiver executions" /><MetricStatus icon={ShieldX} label="Blocked Communications" value={String(analytics?.blockedRequests ?? 0)} tone={analytics?.blockedRequests ? "revoked" : "active"} detail="Stopped before receiver execution" /></>}</section>
+    <section className="dashboard-grid">
+      <ComponentSlot eyebrow="Blockchain lifecycle" title="Recent identity activity">{failed ? <EmptyState kind="network" title="Identity activity unavailable" description="Start the local blockchain and backend to restore live records." /> : lifecycle.length ? <div className="activity-feed">{lifecycle.map((event) => <Link key={`${event.transactionHash}-${event.type}`} to={`/app/registry/${event.agentId}`}><span className={`activity-icon event-${event.type.toLowerCase()}`}><Fingerprint /></span><span><strong>{event.agentId} {event.type.toLowerCase()}</strong><small>Block {event.blockNumber} · {new Date(Number(event.timestamp) * 1000).toLocaleString()}</small></span><ArrowRight /></Link>)}</div> : <EmptyState title="No lifecycle events" description="Register an identity to create the first real blockchain event." kind="activity" />}</ComponentSlot>
+      <ComponentSlot eyebrow="Safe next actions" title="Quick actions"><div className="quick-actions"><QuickAction to="/app/register" icon={KeyRound} title="Register an agent" label="Issue on-chain identity" /><QuickAction to="/app/verification" icon={ShieldCheck} title="Verify identity" label="Read AgentRegistry state" /><QuickAction to="/app/communication" icon={RadioTower} title="Send authenticated request" label="Open communication" /></div></ComponentSlot>
+      <ComponentSlot eyebrow="Persisted authentication audit" title="Recent security activity">{audit.length ? <div className="security-feed">{audit.map((event) => <div key={event.id}><StatusBadge tone={event.result === "VERIFIED" ? "verified" : "blocked"} label={event.code} /><span><strong>{event.senderAgentId ?? "Unknown sender"}</strong><small>{new Date(event.timestamp).toLocaleString()} · {event.reason}</small></span></div>)}</div> : <EmptyState title="No verification activity" description="Signed-request verification events will appear here from persistent audit storage." kind="activity" />}</ComponentSlot>
+      <ComponentSlot eyebrow="Authenticated delivery" title="Recent Agent-to-Agent activity">{interactions.length ? <div className="activity-feed">{interactions.map((item) => <Link key={item.id} to="/app/communication"><span className="activity-icon"><RadioTower /></span><span><strong>{item.senderAgentId} → {item.receiverAgentId}</strong><small>{item.action} · {new Date(item.createdAt).toLocaleString()}</small></span><ArrowRight /></Link>)}</div> : <EmptyState title="No verified interactions" description="Authenticated agent deliveries will appear here." kind="activity" />}</ComponentSlot>
+      <ComponentSlot eyebrow="Current chain" title="Network health"><div className="health-detail-list"><span><RadioTower /><strong>Backend</strong><StatusBadge tone={health.phase === "online" ? "active" : "offline"} /></span><span><ShieldCheck /><strong>Blockchain</strong><code>{health.phase === "online" ? `Chain ${health.data.blockchain.chainId}` : "Unavailable"}</code></span><span><Bot /><strong>AgentRegistry</strong><code>{health.phase === "online" ? health.data.blockchain.registryAddress : "Unavailable"}</code></span><span><Activity /><strong>Persistence</strong><code>{health.phase === "online" ? health.data.persistenceMode : "Unavailable"}</code></span></div></ComponentSlot>
+      <ComponentSlot eyebrow="Lifecycle distribution" title="Identity status breakdown"><div className="status-breakdown"><div><span style={{ width: agents.length ? `${(active / agents.length) * 100}%` : "0%" }} /></div><p><span><i className="active-dot" /> Active <strong>{active}</strong></span><span><i className="revoked-dot" /> Revoked <strong>{revoked}</strong></span></p></div></ComponentSlot>
+    </section>
+  </div>;
 }
 
 function MetricStatus({ icon: Icon, label, value, detail, tone }: { icon: typeof Bot; label: string; value: string; detail: string; tone: "active" | "verified" | "revoked" }) { return <article className="metric-card"><header><span><Icon /></span><StatusBadge tone={tone} label="LIVE" /></header><p>{label}</p><strong>{value}</strong><small>{detail}</small></article>; }

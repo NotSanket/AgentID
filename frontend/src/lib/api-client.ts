@@ -1,4 +1,4 @@
-import type { AgentMetadataInput, AgentRecord, AnalyticsSummary, AuditEvent, DemoWallet, EnrichedAgent, HealthResponse, IdentityContractConfig, IdentityLifecycleEvent, IdentityProfileInput, IdentityWriteResponse, ApiErrorBody } from "../types/api";
+import type { AgentMetadataInput, AgentRecord, AnalyticsSummary, AuditEvent, DemoWallet, EnrichedAgent, HealthResponse, IdentityContractConfig, IdentityLifecycleEvent, IdentityProfileInput, IdentityWriteResponse, ApiErrorBody, AgentRequest, CommunicationCapabilities, CommunicationResult, DemoCommunicationAgent, InteractionRecord, JsonValue, Pagination, PreparedCommunication } from "../types/api";
 
 // Live registry scans and Supabase analytics can overlap on first load.
 // Keep the UI bounded, while allowing those independent local calls to settle.
@@ -43,7 +43,14 @@ export class ApiClient {
   demoLifecycle(agentId: string, wallet: string, action: "revoke" | "reactivate") { return this.request<IdentityWriteResponse>(`/api/demo/identities/${encodeURIComponent(agentId)}/${action}`, { method: "POST", body: JSON.stringify({ wallet }) }); }
   updateMetadata(agentId: string, metadata: AgentMetadataInput, authorization: { wallet: string; signature: string; issuedAt: number }) { return this.request(`/api/metadata/agents/${encodeURIComponent(agentId)}`, { method: "PUT", body: JSON.stringify({ metadata, authorization }) }); }
   analytics(signal?: AbortSignal) { return this.request<AnalyticsSummary>("/api/analytics/summary", { signal }); }
-  audit(signal?: AbortSignal) { return this.request<{ events: AuditEvent[] }>("/api/audit?limit=8&offset=0", { signal }); }
+  audit(signal?: AbortSignal, query: Record<string, string | number | undefined> = { limit: 8, offset: 0 }) { return this.request<{ events: AuditEvent[]; pagination: Pagination }>(`/api/audit?${toQuery(query)}`, { signal }); }
+  communicationCapabilities(signal?: AbortSignal) { return this.request<CommunicationCapabilities>("/api/communication/capabilities", { signal }); }
+  prepareCommunication(input: { senderAgentId: string; receiverAgentId: string; action: string; payload: JsonValue }) { return this.request<PreparedCommunication>("/api/communication/prepare", { method: "POST", body: JSON.stringify(input) }); }
+  sendCommunication(request: AgentRequest, signature: string) { return this.request<CommunicationResult>("/api/communication/send", { method: "POST", body: JSON.stringify({ request, signature }) }, true); }
+  demoCommunicationAgents(signal?: AbortSignal) { return this.request<{ agents: DemoCommunicationAgent[]; developmentOnly: true }>("/api/demo/communication/agents", { signal }); }
+  demoCommunicationSend(wallet: string, request: AgentRequest) { return this.request<CommunicationResult>("/api/demo/communication/send", { method: "POST", body: JSON.stringify({ wallet, request }) }, true); }
+  interactions(query: Record<string, string | number | undefined> = { limit: 50, offset: 0 }, signal?: AbortSignal) { return this.request<{ interactions: InteractionRecord[]; pagination: Pagination }>(`/api/interactions?${toQuery(query)}`, { signal }); }
+  interaction(requestId: string, signal?: AbortSignal) { return this.request<{ interaction: InteractionRecord }>(`/api/interactions/${encodeURIComponent(requestId)}`, { signal }); }
   verifySigned(input: unknown) { return this.request<Record<string, unknown>>("/api/verify", { method: "POST", body: JSON.stringify(input) }, true); }
 
   async request<T>(path: string, init: RequestInit = {}, acceptErrorBody = false): Promise<T> {
@@ -88,3 +95,9 @@ export class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+
+function toQuery(values: Record<string, string | number | undefined>) {
+  const query = new URLSearchParams();
+  Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== "") query.set(key, String(value)); });
+  return query.toString();
+}

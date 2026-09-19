@@ -12,7 +12,7 @@ import { Modal, SideDrawer } from "../components/ui/Overlays";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { TechnicalValue, TransactionHash, WalletAddress } from "../components/ui/TechnicalValue";
 import { apiClient } from "../lib/api-client";
-import type { EnrichedAgent, IdentityLifecycleEvent, IdentityTransactionResult } from "../types/api";
+import type { EnrichedAgent, IdentityLifecycleEvent, IdentityTransactionResult, InteractionRecord } from "../types/api";
 
 export function AgentPassportPage() {
   const { agentId = "" } = useParams();
@@ -20,6 +20,7 @@ export function AgentPassportPage() {
   const { notify } = useNotifications();
   const [agent, setAgent] = useState<EnrichedAgent | null>(null);
   const [events, setEvents] = useState<IdentityLifecycleEvent[]>([]);
+  const [communications, setCommunications] = useState<InteractionRecord[]>([]);
   const [phase, setPhase] = useState<"loading" | "ready" | "error" | "missing">("loading");
   const [warning, setWarning] = useState<string | null>(null);
   const [updateOpen, setUpdateOpen] = useState(false);
@@ -40,6 +41,11 @@ export function AgentPassportPage() {
       .catch((error) => setPhase(error?.status === 404 ? "missing" : "error"));
   };
   useEffect(load, [agentId]);
+  useEffect(() => {
+    Promise.all([apiClient.interactions({ senderAgentId: agentId, limit: 50, offset: 0 }), apiClient.interactions({ receiverAgentId: agentId, limit: 50, offset: 0 })])
+      .then(([sent, received]) => setCommunications([...sent.interactions, ...received.interactions].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))))
+      .catch(() => setCommunications([]));
+  }, [agentId]);
 
   const owner = Boolean(agent && session.address && agent.owner.toLowerCase() === session.address.toLowerCase());
   const registration = events.find((event) => event.type === "Registered");
@@ -88,6 +94,7 @@ export function AgentPassportPage() {
       <AgentPassport agent={{ name: agent.displayName, agentId: agent.agentId, organization: agent.organization, wallet: agent.owner, blockchainStatus: agent.status === "Active" ? "active" : "revoked", registrationBlock: registration?.blockNumber, transactionHash: registration?.transactionHash, capabilities: agent.capabilities }} />
       <section className="passport-detail-grid"><article className="panel identity-details"><header><div><p className="eyebrow">Authoritative registry record</p><h3>On-chain identity</h3></div><StatusBadge tone={agent.status === "Active" ? "active" : "revoked"} /></header><dl><div><dt>Owner wallet</dt><dd><WalletAddress value={agent.owner} /></dd></div><div><dt>Contract</dt><dd>{session.config ? <TechnicalValue label="contract address" value={session.config.registryAddress} /> : "Unavailable"}</dd></div><div><dt>Network</dt><dd>{session.config?.network ?? "Unavailable"}</dd></div><div><dt>Chain ID</dt><dd>{session.config?.chainId ?? "Unavailable"}</dd></div><div><dt>Registered</dt><dd>{formatTimestamp(agent.registeredAt)}</dd></div><div><dt>Last updated</dt><dd>{formatTimestamp(agent.updatedAt)}</dd></div>{registration && <div><dt>Registration transaction</dt><dd><TransactionHash value={registration.transactionHash} /></dd></div>}</dl><p className="identity-description">{agent.description ?? "Metadata unavailable"}</p></article>
         <article className="panel lifecycle-panel"><header><div><p className="eyebrow">Immutable event history</p><h3>Identity lifecycle</h3></div><Activity /></header><ol className="lifecycle-list">{events.map((event) => <li key={`${event.transactionHash}-${event.type}`}><span className={`event-dot event-${event.type.toLowerCase()}`} /><div><strong>IDENTITY {event.type.toUpperCase()}</strong><small><Clock3 /> {formatTimestamp(event.timestamp)} · Block {event.blockNumber}</small><TransactionHash value={event.transactionHash} /></div></li>)}</ol></article></section>
+      {communications.length > 0 && <section className="panel passport-communication"><header><div><p className="eyebrow">Authenticated communication</p><h3>Verified interaction summary</h3></div><Link to="/app/communication">Open history →</Link></header><div className="communication-summary-grid"><div><small>AS SENDER</small><strong>{communications.filter((item) => item.senderAgentId === agentId).length}</strong></div><div><small>AS RECEIVER</small><strong>{communications.filter((item) => item.receiverAgentId === agentId).length}</strong></div><div><small>LAST COMMUNICATION</small><strong>{new Date(communications[0].createdAt).toLocaleDateString()}</strong></div></div></section>}
       <section className="panel owner-controls"><header><div><p className="eyebrow"><WalletCards size={13} /> Controlling wallet actions</p><h3>Identity lifecycle controls</h3></div>{owner && <StatusBadge tone="verified" label="OWNER VERIFIED" />}</header>{!owner && <div className="owner-gate"><ShieldCheck /><div><strong>Only the controlling wallet can modify this identity.</strong><p>Connect the registered browser wallet or select its assigned local demo wallet.</p></div><div>{session.browserWalletAvailable && <Button variant="secondary" onClick={() => session.connectBrowserWallet().catch(() => undefined)}>Connect wallet</Button>}{session.demoWallets.filter((wallet) => wallet.assignedAgentId === agent.agentId).map((wallet) => <Button key={wallet.address} variant="technical" onClick={() => session.selectDemoWallet(wallet)}>Use {wallet.label}</Button>)}</div></div>}{owner && <div className="owner-action-row"><Button variant="secondary" icon={Edit3} onClick={() => setUpdateOpen(true)}>Update Identity</Button>{agent.status === "Active" ? <Button variant="danger" icon={ShieldAlert} onClick={() => setRevokeOpen(true)}>Revoke Identity</Button> : <Button variant="success" icon={RotateCcw} loading={busy} onClick={() => runLifecycle("reactivate")}>Reactivate Identity</Button>}</div>}{actionError && <p className="validation-message">{actionError}</p>}</section>
       {transaction && <TransactionReceiptPanel transaction={transaction} />}
       <SideDrawer open={updateOpen} onClose={() => setUpdateOpen(false)} title="Update Identity"><div className="drawer-form"><FormField label="Agent Name" htmlFor="update-name"><TextInput id="update-name" value={name} onChange={(e) => setName(e.target.value)} /></FormField><FormField label="Organization" htmlFor="update-organization"><TextInput id="update-organization" value={organization} onChange={(e) => setOrganization(e.target.value)} /></FormField><FormField label="Description" htmlFor="update-description"><Textarea id="update-description" value={description} onChange={(e) => setDescription(e.target.value)} /></FormField><FormField label="Category" htmlFor="update-category"><TextInput id="update-category" value={category} onChange={(e) => setCategory(e.target.value)} /></FormField><FormField label="Capabilities" htmlFor="update-capabilities"><TextInput id="update-capabilities" value={capabilities} onChange={(e) => setCapabilities(e.target.value)} /></FormField><p className="field-note">Name and organization changes require a blockchain transaction. Profile-only metadata changes require an owner signature but no transaction.</p><Button loading={busy} onClick={saveUpdate}>Save Identity</Button></div></SideDrawer>

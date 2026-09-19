@@ -13,14 +13,14 @@ describe("application routing", () => {
     expect(await screen.findByText("SYSTEM OFFLINE")).toBeInTheDocument();
   });
 
-  it("keeps future communication work as an intentional Stage 6 module", async () => {
+  it("opens the implemented Stage 6 communication workspace", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("offline"));
     const user = userEvent.setup();
     const router = createMemoryRouter(routes, { initialEntries: ["/app"] });
     render(<RouterProvider router={router} />);
     await user.click(screen.getByRole("link", { name: "Communication" }));
-    expect(await screen.findByRole("heading", { name: "Communication", level: 2 })).toBeInTheDocument();
-    expect(screen.getByText(/will be connected in Stage 6/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Agent Communication", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trust pipeline" })).toBeInTheDocument();
     await waitFor(() => expect(router.state.location.pathname).toBe("/app/communication"));
   });
 

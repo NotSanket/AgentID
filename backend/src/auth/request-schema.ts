@@ -26,3 +26,15 @@ export const signedRequestSchema = z.object({
   request: agentRequestSchema,
   signature: z.string().min(1),
 }).strict();
+
+export const communicationDraftSchema = agentRequestSchema.pick({
+  senderAgentId: true,
+  receiverAgentId: true,
+  action: true,
+  payload: true,
+}).strict();
+
+export const demoCommunicationSchema = z.object({
+  wallet: z.string().trim().min(1).max(128),
+  request: agentRequestSchema,
+}).strict();

@@ -9,6 +9,7 @@ import { RegisterAgentPage } from "../pages/RegisterAgentPage";
 import { RegistryPage } from "../pages/RegistryPage";
 import { AgentPassportPage } from "../pages/AgentPassportPage";
 import { VerificationPage } from "../pages/VerificationPage";
+import { CommunicationPage } from "../pages/CommunicationPage";
 
 export const routes: RouteObject[] = [
   { path: "/", element: <LandingPage /> },
@@ -21,7 +22,7 @@ export const routes: RouteObject[] = [
       { path: "registry/:agentId", element: <AgentPassportPage /> },
       { path: "register", element: <RegisterAgentPage /> },
       { path: "verification", element: <VerificationPage /> },
-      { path: "communication", element: <ModulePlaceholderPage module="Communication" stage="Stage 6" /> },
+      { path: "communication", element: <CommunicationPage /> },
       { path: "security", element: <ModulePlaceholderPage module="Security Lab" stage="Stage 7" /> },
       { path: "trust-graph", element: <ModulePlaceholderPage module="Trust Graph" stage="Stage 7" /> },
       { path: "explorer", element: <ModulePlaceholderPage module="Explorer" stage="Stage 7" /> },

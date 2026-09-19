@@ -1,6 +1,6 @@
 # AgentID Project Context
 
-This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 5 implementation on 2026-09-19. Future changes should update this document when the implemented architecture or verified results change.
+This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 6 implementation on 2026-09-20. Future changes should update this document when the implemented architecture or verified results change.
 
 ## Project Goal
 
@@ -31,7 +31,7 @@ The current implementation has these layers:
 - strictly guarded local-Hardhat demo writes for teaching and development;
 - a real Registry, Digital Agent Passport, identity issuance wizard, verification workspace, and live Command Center.
 
-The Stage 5 core identity portal is implemented. Agent communication remains a Stage 6 module; security simulation, graph, explorer, and expanded analytics visualization remain later-stage work. Supabase support is implemented, and both Stage 3 persistence plus Stage 5 identity-metadata persistence were verified against the configured real project on 2026-09-19.
+The Stage 6 authenticated communication product is implemented. Security simulation, graph, explorer, and expanded analytics visualization remain later-stage work. Supabase support is implemented, and Stage 3 persistence, Stage 5 identity metadata, and Stage 6 communication records have been verified against the configured real project.
 
 ## Stage 1 — Blockchain Foundation
 
@@ -458,6 +458,62 @@ Remove-Item Env:\NODE_OPTIONS -ErrorAction SilentlyContinue
 Remove-Item Env:\LOCALAPPDATA -ErrorAction SilentlyContinue
 ```
 
+## Stage 6 - Authenticated Agent-to-Agent Communication
+
+Stage 6 is **COMPLETE**. It turns the preserved Stage 2 authentication-before-routing service into a real product workflow without duplicating authentication, routing, auditing, or persistence.
+
+The request path is:
+
+1. the backend prepares a canonical request with a UUID request ID, current server timestamp, and 32-byte cryptographically random nonce;
+2. the controlling browser wallet or narrowly guarded local Hardhat signer signs the existing EIP-712 `AgentRequest` structure;
+3. the backend recovers the signer, looks up both AgentIDs, matches the recovered wallet to the claimed sender, verifies Active lifecycle state, validates timestamp freshness, and atomically consumes the sender-scoped nonce;
+4. only a fully verified request reaches the existing deterministic receiver router;
+5. the authentication attempt is audited and a successful request/response interaction is persisted through the existing Stage 3 stores.
+
+The communication UI at `/app/communication` provides:
+
+- ownership-aware browser-wallet and guarded local-demo sender modes;
+- Active receiver selection and receiver-supported actions;
+- friendly and exact JSON payload editors;
+- a real ten-stage trust pipeline driven by backend results;
+- verified conversation and structured response views;
+- explicit blocked states with `RECEIVER NOT EXECUTED`;
+- a signed request inspector showing the EIP-712 domain, exact request, payload hash, nonce, and signature without exposing private keys;
+- persistent verified and blocked communication history with filters and an accessible detail drawer;
+- an exact-request replay demonstration that is blocked with `NONCE_REUSED`;
+- a deliberate revoked-identity demonstration;
+- a real two-step TravelAI to HotelAI, then TravelAI to PaymentAI workflow, with each request authenticated independently;
+- real communication metrics and recent activity on Command Center;
+- a concise verified-interaction summary on Agent Passport pages.
+
+Stage 6 API additions are:
+
+- `GET /api/communication/capabilities`;
+- `POST /api/communication/prepare`;
+- `GET /api/demo/communication/agents`;
+- `POST /api/demo/communication/send`;
+- the existing `GET /api/interactions` and `GET /api/interactions/:requestId` endpoints are used for history and details;
+- `GET /api/audit` now supports an exact `requestId` filter.
+
+The local demo signer is development-only, loopback-only, chain-31337-only, and restricted to the known TravelAI, HotelAI, and PaymentAI Hardhat accounts. It accepts only the AgentID owned by the selected wallet and never exposes a private key. Browser mode signs with `BrowserProvider` and requires the connected wallet and chain to match the prepared request.
+
+Verified Stage 6 results on 2026-09-20:
+
+- **14 Stage 6 backend tests added; 102 / 102 total backend tests passing**;
+- **18 Stage 6 frontend tests added; 52 / 52 total frontend tests passing**;
+- **31 / 31 Stage 1 blockchain tests passing**;
+- blockchain, backend, and frontend typechecks passing;
+- Solidity compile and frontend production build passing;
+- responsive browser verification passing at 1920, 1440, 1366, 1024, 768, and 390 CSS pixels without horizontal overflow;
+- live Supabase-backed valid request `REQ-b5e97166-1880-41a0-b476-f67d3cec7244` verified, executed by HotelAI, and persisted with an audit event and interaction;
+- replay of that exact accepted request blocked with `NONCE_REUSED` and no receiver execution;
+- revoked PaymentAI request `REQ-3ea20a25-bf35-4db1-9c1d-bba184ed64e4` blocked with `AGENT_REVOKED`, followed by successful reactivation;
+- workflow requests `REQ-5dc2bb5a-8302-466d-be67-90865efba11e` and `REQ-70f801f4-9adf-4e73-96c7-9b1343c0c0c5` independently verified and delivered to HotelAI and PaymentAI.
+
+The demo handlers return deterministic local data with source `SIMULATED_DEMO_DATA`. They are not LLMs, fine-tuned models, or external integrations. AgentID authenticates identity and request integrity; it does not certify the quality or safety of an agent's logic.
+
+See `docs/COMMUNICATION.md` for the beginner-friendly communication guide.
+
 ## Current Known Issues / Workarounds
 
 - The current Windows/Codex host needs `.tools/node-userinfo-workaround.cjs` for the Node `os.userInfo()` failure described above.
@@ -470,7 +526,7 @@ Remove-Item Env:\LOCALAPPDATA -ErrorAction SilentlyContinue
 - Supabase requires the committed migration and metadata seed to be run manually for a new project.
 - A local Hardhat chain and all of its deployed contract state reset whenever that local chain is restarted. Run the localhost seed again and use the refreshed deployment manifest.
 - The demo uses unlocked local Hardhat accounts only. It must not be used with real funds.
-- The frontend production build currently emits a non-failing warning because the main JavaScript chunk is about 798 kB before gzip (about 261 kB gzip). Route-level code splitting is a later optimization; it does not affect Stage 5 correctness.
+- The frontend production build currently emits a non-failing warning because the main JavaScript chunk is about 824 kB before gzip (about 267 kB gzip). Route-level code splitting is a later optimization; it does not affect Stage 6 correctness.
 
 ## Git Checkpoint
 
@@ -519,9 +575,13 @@ Stage 4 is complete and provides the premium visual and interaction foundation. 
 
 Stage 5 is complete. The core identity routes use real AgentRegistry state and real persisted metadata. Registration, update, revoke, and reactivation wait for actual transaction receipts. Verification reports Active, Revoked, or Not Found from authoritative registry data, and the advanced mode exposes the preserved Stage 2 signed-request verifier.
 
+## Stage 6 Status
+
+Stage 6 is complete. Agent-to-agent requests use the existing EIP-712 schema and Stage 2 authentication-before-routing service. Verified interactions and all authentication attempts use the existing Stage 3 persistence stores. The communication page, replay and revoked-agent demonstrations, two-step travel workflow, Command Center metrics, Passport summary, automated tests, live Supabase-backed E2E verification, and responsive QA are complete.
+
 ## Next Stage
 
-Stage 6 - agent communication and an optional LLM layer.
+Stage 7 - Trust Graph, Security Lab, Explorer, and expanded analytics.
 
 ## Future Stages
 

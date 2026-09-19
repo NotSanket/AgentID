@@ -62,6 +62,7 @@ export class SupabaseAuditStore implements AuditStore {
       .range(query.offset, query.offset + query.limit - 1);
     if (query.result) request = request.eq("result", query.result);
     if (query.code) request = request.eq("code", query.code);
+    if (query.requestId) request = request.eq("request_id", query.requestId);
     if (query.senderAgentId) request = request.eq("sender_agent_id", query.senderAgentId);
     if (query.receiverAgentId) request = request.eq("receiver_agent_id", query.receiverAgentId);
     const { data, error, count } = await request;

@@ -54,7 +54,7 @@ describe("AuthenticationService", () => {
     const result = await authentication.authenticate(value, await signRequest(value));
     expect(result).toMatchObject({ verified: true, code: "VERIFIED", registeredWallet: travelWallet.address });
     expect(result.checks).toEqual({
-      signatureValid: true, senderExists: true, receiverExists: true, walletMatches: true,
+      signatureValid: true, senderExists: true, receiverExists: true, receiverActive: true, walletMatches: true,
       identityActive: true, timestampValid: true, nonceUnused: true,
     });
   });
