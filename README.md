@@ -2,23 +2,26 @@
 
 **A blockchain-based identity and request-authentication framework for collaborative AI agents.**
 
-Stage 1 binds a readable AgentID to an Ethereum wallet and records whether the identity is Active or Revoked. Stage 2 adds proof that the current sender controls that wallet: EIP-712 signing, signer recovery, registry comparison, timestamp checks, replay protection, authenticated routing, and off-chain audit events.
+Stage 1 binds a readable AgentID to an Ethereum wallet and records whether the identity is Active or Revoked. Stage 2 adds EIP-712 authentication and authenticated routing. Stage 3 adds optional Supabase/PostgreSQL persistence for off-chain application data while preserving a complete in-memory fallback.
 
 Identity verification does not prove that an agent is safe, truthful, intelligent, or well behaved.
 
-## Included in Stage 2
+## Current implementation
 
 - Solidity `AgentRegistry` with the original 31 tests;
 - deployment manifest updated with every actual deployment;
 - Express and strict TypeScript backend using ethers v6 and Zod;
 - canonical payload hashing and EIP-712 signatures;
 - detailed authentication results and rejection codes;
-- in-memory nonce and audit abstractions;
+- repository-based audit, replay, interaction, and metadata stores;
+- official Supabase JavaScript client integration with startup fallback;
+- versioned PostgreSQL migration with database-level nonce uniqueness and restricted public access;
+- filtered/paginated history APIs and real stored-data analytics;
 - offline deterministic TravelAI, HotelAI, and PaymentAI handlers;
-- REST endpoints and 39 backend/security tests;
+- REST endpoints, 39 preserved Stage 2 tests, and 29 Stage 3 tests;
 - real local authentication terminal demo.
 
-There is no frontend, Supabase, or LLM integration in this stage.
+There is no frontend or LLM integration yet. Supabase support is implemented, but real credentials are optional and were not available for live-connectivity verification.
 
 ## Prerequisites
 
@@ -56,7 +59,7 @@ npm install
 npm run dev
 ```
 
-The API starts at `http://127.0.0.1:4000`. Check `GET /api/health` before sending requests.
+The API starts at `http://127.0.0.1:4000`. Check `GET /api/health` before sending requests. With the default environment it reports `persistenceMode: IN_MEMORY`. See [the Supabase guide](docs/SUPABASE.md) to enable persistent mode.
 
 ### Terminal 4 — authentication demo
 
@@ -79,7 +82,7 @@ npm run typecheck
 npm test
 ```
 
-Expected results are 31 blockchain tests and 39 backend tests.
+Expected results are 31 blockchain tests and 68 backend tests: the original 39 Stage 2 tests plus 29 Stage 3 tests.
 
 ## REST endpoints
 
@@ -91,6 +94,12 @@ Expected results are 31 blockchain tests and 39 backend tests.
 - `POST /api/verify`
 - `POST /api/communication/send`
 - `GET /api/audit`
+- `GET /api/interactions`
+- `GET /api/interactions/:requestId`
+- `GET /api/analytics/summary`
+- `GET /api/analytics/security`
+- `GET /api/metadata/agents`
+- `GET /api/metadata/agents/:agentId`
 - `GET /api/security/scenarios`
 
 There is no HTTP endpoint that signs arbitrary data. See [backend/README.md](backend/README.md), [authentication documentation](docs/AUTHENTICATION.md), and [blockchain documentation](docs/BLOCKCHAIN.md).
@@ -99,4 +108,4 @@ There is no HTTP endpoint that signs arbitrary data. See [backend/README.md](bac
 
 Accept a communication only when its complete typed request recovers the same wallet currently registered to an Active sender AgentID, its timestamp is fresh, and its nonce has not previously been accepted.
 
-Identity lifecycle belongs on-chain; high-frequency communication attempts, audit logs, payloads, and replay state remain off-chain.
+Identity lifecycle belongs on-chain. Audit events, verified interaction history, application metadata, analytics inputs, and replay state remain off-chain in Supabase or the in-memory fallback.

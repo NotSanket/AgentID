@@ -71,7 +71,8 @@ describe("AuthenticationService", () => {
     const value = makeRequest();
     expect(await authentication.authenticate(value, await signRequest(value, strangerWallet)))
       .toMatchObject({ verified: false, code: "UNKNOWN_WALLET" });
-    expect(audit.list()[0]).toMatchObject({ type: "UNKNOWN_WALLET_BLOCKED", code: "UNKNOWN_WALLET" });
+    expect((await audit.list({ limit: 20, offset: 0 })).events[0])
+      .toMatchObject({ type: "UNKNOWN_WALLET_BLOCKED", code: "UNKNOWN_WALLET" });
   });
 
   it("blocks wallet impersonation", async () => {
@@ -147,23 +148,27 @@ describe("AuthenticationService", () => {
   });
 
   it("rejects an unknown receiver before delivery", async () => {
-    const { authentication } = setup();
+    const { authentication, audit } = setup();
     const value = makeRequest({ receiverAgentId: "AGT-NOBODY-001" });
     expect(await authentication.authenticate(value, await signRequest(value)))
       .toMatchObject({ verified: false, code: "UNKNOWN_RECEIVER" });
+    expect((await audit.list({ limit: 20, offset: 0 })).events[0])
+      .toMatchObject({ type: "UNKNOWN_RECEIVER_BLOCKED", code: "UNKNOWN_RECEIVER" });
   });
 
   it("records the correct verification audit event", async () => {
     const { authentication, audit } = setup();
     const value = makeRequest();
     await authentication.authenticate(value, await signRequest(value));
-    expect(audit.list()[0]).toMatchObject({ type: "REQUEST_VERIFIED", code: "VERIFIED", result: "VERIFIED" });
+    expect((await audit.list({ limit: 20, offset: 0 })).events[0])
+      .toMatchObject({ type: "REQUEST_VERIFIED", code: "VERIFIED", result: "VERIFIED" });
   });
 
   it("records the correct impersonation audit event", async () => {
     const { authentication, audit } = setup();
     const value = makeRequest();
     await authentication.authenticate(value, await signRequest(value, paymentWallet));
-    expect(audit.list()[0]).toMatchObject({ type: "IMPERSONATION_BLOCKED", code: "WALLET_MISMATCH", result: "BLOCKED" });
+    expect((await audit.list({ limit: 20, offset: 0 })).events[0])
+      .toMatchObject({ type: "IMPERSONATION_BLOCKED", code: "WALLET_MISMATCH", result: "BLOCKED" });
   });
 });

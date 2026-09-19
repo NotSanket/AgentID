@@ -36,6 +36,7 @@ export interface AuthenticationResult {
   receiverAgentId?: string;
   recoveredWallet?: string;
   registeredWallet?: string;
+  operationalWarnings?: string[];
   checks: AuthenticationChecks;
 }
 
@@ -114,9 +115,12 @@ export class AuthenticationService {
         return this.finish(request, this.reject("REQUEST_EXPIRED", "Request timestamp is outside the allowed freshness window.", checks, recoveredWallet, sender.owner));
       }
 
-      checks.nonceUnused = !this.replayStore.has(request.nonce);
-      if (!checks.nonceUnused || !this.replayStore.consume(request.nonce)) {
-        checks.nonceUnused = false;
+      checks.nonceUnused = await this.replayStore.consume({
+        senderAgentId: request.senderAgentId,
+        nonce: request.nonce,
+        requestId: request.requestId,
+      });
+      if (!checks.nonceUnused) {
         return this.finish(request, this.reject("NONCE_REUSED", "Request nonce has already been accepted.", checks, recoveredWallet, sender.owner));
       }
 
@@ -149,7 +153,7 @@ export class AuthenticationService {
     return { verified: false, code, reason, recoveredWallet, registeredWallet, checks };
   }
 
-  private finish(request: AgentRequest | undefined, result: AuthenticationResult): AuthenticationResult {
+  private async finish(request: AgentRequest | undefined, result: AuthenticationResult): Promise<AuthenticationResult> {
     if (request) {
       result.senderAgentId = request.senderAgentId;
       result.receiverAgentId = request.receiverAgentId;
@@ -158,23 +162,32 @@ export class AuthenticationService {
       VERIFIED: "REQUEST_VERIFIED",
       UNKNOWN_WALLET: "UNKNOWN_WALLET_BLOCKED",
       UNKNOWN_AGENT: "UNKNOWN_AGENT_BLOCKED",
+      UNKNOWN_RECEIVER: "UNKNOWN_RECEIVER_BLOCKED",
       WALLET_MISMATCH: "IMPERSONATION_BLOCKED",
       AGENT_REVOKED: "REVOKED_AGENT_BLOCKED",
       NONCE_REUSED: "REPLAY_BLOCKED",
       REQUEST_EXPIRED: "EXPIRED_REQUEST_BLOCKED",
       INVALID_SIGNATURE: "INVALID_SIGNATURE_BLOCKED",
     };
-    this.auditStore.record(typeByCode[result.code] ?? "REQUEST_BLOCKED", {
-      requestId: request?.requestId,
-      senderAgentId: request?.senderAgentId,
-      receiverAgentId: request?.receiverAgentId,
-      action: request?.action,
-      result: result.verified ? "VERIFIED" : "BLOCKED",
-      code: result.code,
-      reason: result.reason,
-      recoveredWallet: result.recoveredWallet,
-      registeredWallet: result.registeredWallet,
-    });
+    try {
+      await this.auditStore.record(typeByCode[result.code] ?? "REQUEST_BLOCKED", {
+        requestId: request?.requestId,
+        senderAgentId: request?.senderAgentId,
+        receiverAgentId: request?.receiverAgentId,
+        action: request?.action,
+        result: result.verified ? "VERIFIED" : "BLOCKED",
+        code: result.code,
+        reason: result.reason,
+        recoveredWallet: result.recoveredWallet,
+        registeredWallet: result.registeredWallet,
+      });
+    } catch {
+      console.error("Audit persistence failed; the authentication decision was preserved.");
+      result.operationalWarnings = [
+        ...(result.operationalWarnings ?? []),
+        "AUDIT_PERSISTENCE_FAILED",
+      ];
+    }
     return result;
   }
 }

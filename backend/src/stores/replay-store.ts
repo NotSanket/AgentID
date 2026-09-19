@@ -1,23 +1,30 @@
+import type { ReplayNonceInput } from "../persistence/types.js";
+
 export interface ReplayStore {
-  has(nonce: string): boolean;
-  consume(nonce: string): boolean;
-  clear(): void;
+  consume(input: ReplayNonceInput): Promise<boolean>;
+  isConsumed(senderAgentId: string, nonce: string): Promise<boolean>;
+  clear(): Promise<void>;
 }
 
 export class InMemoryReplayStore implements ReplayStore {
   private readonly nonces = new Set<string>();
 
-  has(nonce: string): boolean {
-    return this.nonces.has(nonce);
+  private key(senderAgentId: string, nonce: string): string {
+    return `${senderAgentId}\u0000${nonce}`;
   }
 
-  consume(nonce: string): boolean {
-    if (this.nonces.has(nonce)) return false;
-    this.nonces.add(nonce);
+  async consume(input: ReplayNonceInput): Promise<boolean> {
+    const key = this.key(input.senderAgentId, input.nonce);
+    if (this.nonces.has(key)) return false;
+    this.nonces.add(key);
     return true;
   }
 
-  clear(): void {
+  async isConsumed(senderAgentId: string, nonce: string): Promise<boolean> {
+    return this.nonces.has(this.key(senderAgentId, nonce));
+  }
+
+  async clear(): Promise<void> {
     this.nonces.clear();
   }
 }

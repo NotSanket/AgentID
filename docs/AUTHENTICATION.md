@@ -47,9 +47,9 @@ Tampering also changes the digest. A mathematically well-formed signature may st
 
 The default freshness window is 300 seconds, with 30 seconds of future clock-skew tolerance. Old or excessively future requests receive `REQUEST_EXPIRED`.
 
-A nonce is a unique one-time value. The in-memory replay store consumes it only after every other authentication check succeeds. Submitting the same accepted request again receives `NONCE_REUSED`. Rejected requests do not consume their nonce.
+A nonce is a unique one-time value. The selected replay repository atomically consumes the `(senderAgentId, nonce)` pair only after every other authentication check succeeds. Submitting the same accepted pair again receives `NONCE_REUSED`. Rejected requests do not consume their nonce. Supabase mode enforces this with a database unique constraint; fallback mode enforces it with an in-memory set.
 
-Nonce state is off-chain because it is high-frequency operational data. Putting every request nonce on Ethereum would add latency, public data, and transaction cost without needing blockchain consensus. Stage 3 can persist this state outside Ethereum.
+Nonce state is off-chain because it is high-frequency operational data. Putting every request nonce on Ethereum would add latency, public data, and transaction cost without needing blockchain consensus. Stage 3 persists it in Supabase when configured and otherwise retains the Stage 2 in-memory behavior.
 
 ## Revocation
 
@@ -66,7 +66,9 @@ For impersonation, the registered PaymentAI wallet signs a request that claims `
 - On-chain events describe identity registration, update, revocation, and reactivation.
 - Off-chain audit events describe request verification and rejection attempts.
 
-Audit entries are not called blockchain transactions because Stage 2 stores them only in process memory. They reset when the backend restarts. No conversations, payload history, or replay nonces are written to Ethereum.
+Audit entries are not called blockchain transactions because they remain off-chain. In Supabase mode, audit events, accepted replay nonces, verified interaction history, and application metadata survive backend restarts. In fallback mode they remain in memory and reset with the process. No request payload history, audit event, or replay nonce is written to Ethereum.
+
+Audit persistence is operational rather than authoritative: if audit logging fails, the already-computed authentication decision is preserved and an operational warning is returned. Replay persistence is security-critical, so an unexpected replay-store failure blocks authentication with `SERVICE_UNAVAILABLE` rather than bypassing nonce protection.
 
 ## Rejection codes
 

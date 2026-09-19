@@ -40,7 +40,7 @@ function printResult(title: string, result: any): void {
 }
 
 async function main() {
-  const runtime = bootstrap();
+  const runtime = await bootstrap();
   const health = await runtime.blockchain.health();
   if (!health.connected) throw new Error(`Blockchain pre-flight failed: ${health.error}`);
 
@@ -111,7 +111,8 @@ async function main() {
     "not-a-signature",
   ));
 
-  console.log(`\n${line}\nDemo complete. TravelAI was left Active. Audit events: ${runtime.auditStore.list().length}\n${line}\n`);
+  const auditPage = await runtime.auditStore.list({ limit: 100, offset: 0 });
+  console.log(`\n${line}\nDemo complete. TravelAI was left Active. Audit events: ${auditPage.total}\n${line}\n`);
 }
 
 main().catch((error) => {

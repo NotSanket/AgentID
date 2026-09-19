@@ -11,6 +11,9 @@ const environmentSchema = z.object({
   CHAIN_ID: z.coerce.number().int().positive().optional(),
   REQUEST_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(300),
   CLOCK_SKEW_SECONDS: z.coerce.number().int().nonnegative().default(30),
+  SUPABASE_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  SUPABASE_URL: z.string().trim().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().trim().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
@@ -33,6 +36,9 @@ export interface RuntimeConfig {
   artifactPath: string;
   requestMaxAgeSeconds: number;
   clockSkewSeconds: number;
+  supabaseEnabled: boolean;
+  supabaseUrl?: string;
+  supabaseServiceRoleKey?: string;
   nodeEnv: "development" | "test" | "production";
 }
 
@@ -66,6 +72,9 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
       : defaultArtifactPath,
     requestMaxAgeSeconds: env.REQUEST_MAX_AGE_SECONDS,
     clockSkewSeconds: env.CLOCK_SKEW_SECONDS,
+    supabaseEnabled: env.SUPABASE_ENABLED,
+    supabaseUrl: env.SUPABASE_URL || undefined,
+    supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || undefined,
     nodeEnv: env.NODE_ENV,
   };
 }

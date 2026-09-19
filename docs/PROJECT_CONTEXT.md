@@ -1,6 +1,6 @@
 # AgentID Project Context
 
-This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository as verified at the known-good Stage 2 checkpoint on 2026-09-19. Future changes should update this document when the implemented architecture or verified results change.
+This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 3 implementation on 2026-09-19. Future changes should update this document when the implemented architecture or verified results change.
 
 ## Project Goal
 
@@ -21,9 +21,12 @@ The current implementation has these layers:
 - an authentication service that recovers the signer and verifies it against the registry;
 - timestamp freshness and nonce replay protection;
 - deterministic offline TravelAI, HotelAI, and PaymentAI demo handlers;
-- an off-chain audit-store abstraction and authentication audit events.
+- repository abstractions for audit events, replay nonces, verified interactions, and agent metadata;
+- official Supabase JavaScript client integration backed by PostgreSQL;
+- a complete in-memory persistence fallback;
+- analytics calculated from stored authentication and interaction records.
 
-The frontend has **not** been implemented. The `frontend/` directory contains only a placeholder README. Supabase has **not** been implemented or configured.
+The frontend has **not** been implemented. The `frontend/` directory contains only a placeholder README. Supabase support is implemented, but live connectivity has not been verified because real project credentials were not provided.
 
 ## Stage 1 — Blockchain Foundation
 
@@ -104,6 +107,53 @@ The nine verified security scenarios and their actual result codes are:
 
 For the deterministic tampering scenarios, changing signed data causes recovery to produce a different, unregistered address, so the observed code is `UNKNOWN_WALLET`. If a recovered address happened to belong to another registered identity, the request would instead be blocked with `WALLET_MISMATCH`.
 
+## Stage 3 — Persistent Off-Chain Data Layer
+
+Stage 3 adds persistence without moving identity authority away from Ethereum. The backend uses repository interfaces so authentication and application services do not depend directly on Supabase.
+
+Implemented repositories and adapters:
+
+- `AuditStore`: `InMemoryAuditStore` and `SupabaseAuditStore`;
+- `ReplayStore`: `InMemoryReplayStore` and `SupabaseReplayStore`;
+- `InteractionStore`: `InMemoryInteractionStore` and `SupabaseInteractionStore`;
+- `AgentMetadataStore`: `InMemoryAgentMetadataStore` and `SupabaseAgentMetadataStore`.
+
+At startup, `SUPABASE_ENABLED=false` selects the complete in-memory implementation. When Supabase is enabled with a URL and server key, the backend performs a health check and selects Supabase only if it is reachable and migrated. Missing configuration or a failed startup health check selects fallback mode and reports a warning through the health endpoint.
+
+Stage 3 includes:
+
+- `@supabase/supabase-js` 2.116.0;
+- typed database rows isolated in `backend/src/persistence/database.types.ts`;
+- a versioned SQL migration in `supabase/migrations/`;
+- persistent audit events;
+- atomic sender-scoped replay nonce insertion;
+- successful verified interaction history without signatures or secrets;
+- application metadata merged with live blockchain identity state;
+- analytics calculated from stored events and interactions;
+- validated filtering and limit/offset pagination;
+- an idempotent metadata seed command;
+- a complete offline test suite using memory and mocked Supabase clients.
+
+Verified backend result after Stage 3: **68 / 68 tests passing**. This is the preserved 39 Stage 2 tests plus **29 Stage 3 tests**.
+
+### Database tables
+
+| Table | Purpose | Important constraint |
+|---|---|---|
+| `agent_metadata` | Descriptions, categories, capabilities, avatar keys, and themes | `agent_id` is unique but is not identity authority |
+| `audit_events` | Verified and blocked authentication attempts | Off-chain events only; no invented transaction hashes |
+| `interactions` | Successful verified request/response history | `request_id` is unique |
+| `replay_nonces` | Accepted sender nonce usage | `(sender_agent_id, nonce)` is unique |
+
+Row Level Security is enabled on all tables. The migration creates no anonymous/authenticated browser policies, revokes those roles' table privileges, and grants server access to `service_role`. The server key bypasses RLS and must remain secret.
+
+### Persistence failure behavior
+
+- Audit persistence failure never changes an authentication decision; the result includes `AUDIT_PERSISTENCE_FAILED`.
+- Interaction persistence failure never discards an already verified deterministic response; the result includes `INTERACTION_PERSISTENCE_FAILED`.
+- Replay persistence is security-critical. An unexpected replay-store failure blocks authentication with `SERVICE_UNAVAILABLE`.
+- A database unique-constraint error for an existing sender/nonce pair maps cleanly to `NONCE_REUSED`.
+
 ## Important Security Model
 
 A registered identity alone is not enough because anybody can place an AgentID string in JSON. A request must also prove control of the associated wallet.
@@ -138,7 +188,13 @@ These are the routes actually implemented in `backend/src/app.ts`:
 | `GET` | `/api/agents/:agentId` | Look up a registry identity by readable AgentID. |
 | `POST` | `/api/verify` | Authenticate a signed request without executing receiver behavior. |
 | `POST` | `/api/communication/send` | Authenticate a signed request and route it only if verification succeeds. |
-| `GET` | `/api/audit` | Return the current in-memory off-chain authentication audit events. |
+| `GET` | `/api/audit` | Return filtered, paginated authentication audit events. |
+| `GET` | `/api/interactions` | Return filtered, paginated successful interaction history. |
+| `GET` | `/api/interactions/:requestId` | Return one interaction by request ID. |
+| `GET` | `/api/analytics/summary` | Return real aggregate verification and interaction metrics. |
+| `GET` | `/api/analytics/security` | Return blocked-attempt totals grouped by stored reason. |
+| `GET` | `/api/metadata/agents` | Return metadata merged with current blockchain records. |
+| `GET` | `/api/metadata/agents/:agentId` | Return one enriched agent with live wallet and status. |
 | `GET` | `/api/security/scenarios` | Return descriptions and expected codes for the nine security scenarios. |
 
 There is no HTTP endpoint that signs arbitrary data.
@@ -154,11 +210,13 @@ On-chain storage currently contains:
 
 Current off-chain storage contains:
 
-- accepted replay nonces in an in-memory `Set`;
-- authentication audit events in an in-memory array;
+- accepted replay nonces in `replay_nonces` or an in-memory `Set`;
+- authentication audit events in `audit_events` or an in-memory array;
+- successful verified interactions in `interactions` or an in-memory repository;
+- richer agent metadata in `agent_metadata` or predefined in-memory demo metadata;
 - deterministic simulated agent response data generated at runtime.
 
-No request payload history, replay nonce, audit entry, or simulated conversation is written to Ethereum. Stage 3 will replace appropriate temporary stores with persistent Supabase-backed storage while keeping repository interfaces and a local fallback where appropriate.
+No request payload history, replay nonce, audit entry, metadata record, or simulated conversation is written to Ethereum. Supabase persists these records when configured; otherwise they last for the backend process lifetime.
 
 ## Working Commands
 
@@ -199,6 +257,7 @@ npm run dev
 npm run typecheck
 npm test
 npm run demo:auth
+npm run seed:data
 ```
 
 The commands correspond to:
@@ -207,6 +266,7 @@ The commands correspond to:
 - typecheck: `tsc --noEmit`;
 - tests: `vitest run`;
 - authentication demo: `tsx src/demo/auth-demo.ts`.
+- demo metadata seed: `tsx src/scripts/seed-data.ts`.
 
 The local end-to-end workflow is: keep `npm run node` running in one blockchain terminal, run `npm run demo:localhost` in a second terminal, then run the backend or `npm run demo:auth` from `backend/`.
 
@@ -233,7 +293,9 @@ Remove-Item Env:\LOCALAPPDATA -ErrorAction SilentlyContinue
 - The current Windows/Codex host needs `.tools/node-userinfo-workaround.cjs` for the Node `os.userInfo()` failure described above.
 - Hardhat commands on this host use `.tools/localappdata` to avoid the unavailable or stale user-profile compiler cache.
 - Git is initialized. In the current Codex shell, Git is installed at `C:\Program Files\Git\cmd\git.exe` but is not on `PATH`, so automation may need to invoke that full path.
-- Replay nonce state and audit event state are in memory and reset whenever the backend restarts.
+- In `IN_MEMORY` mode, replay nonces, audit events, and interactions reset whenever the backend restarts.
+- Supabase integration is implemented and mocked in automated tests, but live connectivity has not been verified without real credentials.
+- Supabase requires the committed migration and metadata seed to be run manually for a new project.
 - A local Hardhat chain and all of its deployed contract state reset whenever that local chain is restarted. Run the localhost seed again and use the refreshed deployment manifest.
 - The demo uses unlocked local Hardhat accounts only. It must not be used with real funds.
 
@@ -249,9 +311,9 @@ message: AgentID Stage 2 complete
 
 This checkpoint was confirmed as the repository `HEAD` before this context document was added.
 
-## Stage 3 Goal
+## Stage 3 Status
 
-Stage 3 will add the persistent off-chain data layer. It is planned to include:
+Stage 3 is complete and includes:
 
 - Supabase integration;
 - persistent audit events;
@@ -262,13 +324,26 @@ Stage 3 will add the persistent off-chain data layer. It is planned to include:
 - repository interfaces that allow Supabase or a local fallback;
 - migration and schema setup.
 
-Stage 3 must **not** replace the blockchain as the identity source of truth. Wallet ownership and AgentID lifecycle state remain authoritative on `AgentRegistry`.
+Stage 3 does **not** replace the blockchain as the identity source of truth. Wallet ownership and AgentID lifecycle state remain authoritative on `AgentRegistry`.
 
-Stage 3 has not started yet.
+Required environment variables are documented in `backend/.env.example`:
+
+```dotenv
+SUPABASE_ENABLED=false
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. A current Supabase secret key or legacy service-role key can be placed in that backend variable. It must never be returned by an API or copied into frontend code.
+
+The complete setup, migration, RLS, seeding, testing, and fallback instructions are in `docs/SUPABASE.md`.
+
+## Next Stage
+
+Stage 4 — premium frontend and design system.
 
 ## Future Stages
 
-- Stage 4 — premium frontend and design system.
 - Stage 5 — core AgentID UI modules.
 - Stage 6 — agent communication and an optional LLM layer.
 - Stage 7 — Trust Graph, Security Lab, Explorer, and analytics.

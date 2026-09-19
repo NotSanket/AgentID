@@ -6,11 +6,18 @@ import { AuthenticationService } from "../src/auth/authentication-service.js";
 import { CommunicationService } from "../src/services/communication-service.js";
 import { InMemoryAuditStore } from "../src/stores/audit-store.js";
 import { InMemoryReplayStore } from "../src/stores/replay-store.js";
+import { InMemoryInteractionStore } from "../src/stores/interaction-store.js";
+import { InMemoryAgentMetadataStore } from "../src/stores/agent-metadata-store.js";
+import { AnalyticsService } from "../src/services/analytics-service.js";
+import { MetadataService } from "../src/services/metadata-service.js";
+import { DEMO_AGENT_METADATA } from "../src/persistence/demo-metadata.js";
 import { FakeBlockchain, NOW, REGISTRY_ADDRESS, makeRequest, paymentWallet, signRequest, strangerWallet, travelWallet } from "./helpers.js";
 
 function setup() {
   const blockchain = new FakeBlockchain();
   const auditStore = new InMemoryAuditStore();
+  const interactionStore = new InMemoryInteractionStore();
+  const metadataStore = new InMemoryAgentMetadataStore(DEMO_AGENT_METADATA);
   const authentication = new AuthenticationService(blockchain, new InMemoryReplayStore(), auditStore, {
     chainId: 31337,
     verifyingContract: REGISTRY_ADDRESS,
@@ -27,9 +34,20 @@ function setup() {
   }));
   const router = new DemoAgentRouter();
   router.register("AGT-HOTEL-001", { handle });
-  const communication = new CommunicationService(authentication, router);
-  const app = createApp({ blockchain, authentication, communication, auditStore });
-  return { app, handle, auditStore };
+  const communication = new CommunicationService(authentication, router, interactionStore);
+  const analytics = new AnalyticsService(auditStore, interactionStore, blockchain);
+  const metadata = new MetadataService(blockchain, metadataStore);
+  const app = createApp({
+    blockchain,
+    authentication,
+    communication,
+    auditStore,
+    interactionStore,
+    analytics,
+    metadata,
+    persistenceStatus: { mode: "IN_MEMORY", supabaseConnected: false },
+  });
+  return { app, handle, auditStore, interactionStore };
 }
 
 describe("communication routing", () => {

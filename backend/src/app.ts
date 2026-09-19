@@ -1,11 +1,35 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { isAddress } from "ethers";
+import { z } from "zod";
 import type { AuthenticationService } from "./auth/authentication-service.js";
 import { signedRequestSchema } from "./auth/request-schema.js";
 import type { CommunicationService } from "./services/communication-service.js";
 import type { AuditStore } from "./stores/audit-store.js";
 import type { RegistryReader } from "./domain/types.js";
 import type { BlockchainHealth } from "./blockchain/blockchain-service.js";
+import type { InteractionStore, PersistenceStatus } from "./persistence/types.js";
+import type { AnalyticsService } from "./services/analytics-service.js";
+import type { MetadataService } from "./services/metadata-service.js";
+
+const paginationFields = {
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+};
+
+const auditQuerySchema = z.object({
+  ...paginationFields,
+  result: z.enum(["VERIFIED", "BLOCKED"]).optional(),
+  code: z.string().trim().min(1).max(64).optional(),
+  senderAgentId: z.string().trim().min(1).max(64).optional(),
+  receiverAgentId: z.string().trim().min(1).max(64).optional(),
+});
+
+const interactionQuerySchema = z.object({
+  ...paginationFields,
+  senderAgentId: z.string().trim().min(1).max(64).optional(),
+  receiverAgentId: z.string().trim().min(1).max(64).optional(),
+  action: z.string().trim().min(1).max(64).optional(),
+});
 
 export interface ApiBlockchain extends RegistryReader {
   health(): Promise<BlockchainHealth>;
@@ -16,6 +40,10 @@ export interface AppDependencies {
   authentication: AuthenticationService;
   communication: CommunicationService;
   auditStore: AuditStore;
+  interactionStore: InteractionStore;
+  analytics: AnalyticsService;
+  metadata: MetadataService;
+  persistenceStatus: PersistenceStatus;
 }
 
 export function createApp(dependencies: AppDependencies) {
@@ -29,6 +57,9 @@ export function createApp(dependencies: AppDependencies) {
       status: blockchain.connected ? "ok" : "degraded",
       backend: "ok",
       blockchain,
+      persistenceMode: dependencies.persistenceStatus.mode,
+      supabaseConnected: dependencies.persistenceStatus.supabaseConnected,
+      ...(dependencies.persistenceStatus.warning ? { persistenceWarning: dependencies.persistenceStatus.warning } : {}),
     });
   });
 
@@ -70,8 +101,53 @@ export function createApp(dependencies: AppDependencies) {
     response.status(result.delivered ? 200 : 403).json(result);
   });
 
-  app.get("/api/audit", (_request, response) => {
-    response.json({ storage: "OFF_CHAIN_MEMORY", events: dependencies.auditStore.list() });
+  app.get("/api/audit", async (request, response) => {
+    const parsed = auditQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_QUERY", reason: "Audit query parameters are invalid." });
+      return;
+    }
+    const page = await dependencies.auditStore.list(parsed.data);
+    response.json({
+      storage: dependencies.persistenceStatus.mode === "SUPABASE" ? "SUPABASE" : "OFF_CHAIN_MEMORY",
+      events: page.events,
+      pagination: { total: page.total, limit: page.limit, offset: page.offset },
+    });
+  });
+
+  app.get("/api/interactions", async (request, response) => {
+    const parsed = interactionQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      response.status(400).json({ code: "INVALID_QUERY", reason: "Interaction query parameters are invalid." });
+      return;
+    }
+    const page = await dependencies.interactionStore.list(parsed.data);
+    response.json({
+      interactions: page.items,
+      pagination: { total: page.total, limit: page.limit, offset: page.offset },
+    });
+  });
+
+  app.get("/api/interactions/:requestId", async (request, response) => {
+    const interaction = await dependencies.interactionStore.getByRequestId(request.params.requestId);
+    response.status(interaction ? 200 : 404).json(interaction ? { interaction } : { code: "INTERACTION_NOT_FOUND" });
+  });
+
+  app.get("/api/analytics/summary", async (_request, response) => {
+    response.json(await dependencies.analytics.summary());
+  });
+
+  app.get("/api/analytics/security", async (_request, response) => {
+    response.json(await dependencies.analytics.security());
+  });
+
+  app.get("/api/metadata/agents", async (_request, response) => {
+    response.json({ agents: await dependencies.metadata.list() });
+  });
+
+  app.get("/api/metadata/agents/:agentId", async (request, response) => {
+    const agent = await dependencies.metadata.getByAgentId(request.params.agentId);
+    response.status(agent ? 200 : 404).json(agent ? { agent } : { code: "UNKNOWN_AGENT" });
   });
 
   app.get("/api/security/scenarios", (_request, response) => {
