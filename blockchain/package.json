@@ -1,0 +1,33 @@
+{
+  "name": "agentid-blockchain",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ethereum identity registry foundation for AgentID",
+  "type": "module",
+  "scripts": {
+    "compile": "hardhat compile",
+    "typecheck": "tsc --noEmit",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy": "hardhat run scripts/deploy.ts",
+    "deploy:localhost": "hardhat run scripts/deploy.ts --network localhost",
+    "demo": "hardhat run scripts/seed-demo.ts",
+    "demo:localhost": "hardhat run scripts/seed-demo.ts --network localhost",
+    "gas": "hardhat run scripts/gas-report.ts"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "4.0.15",
+    "@nomicfoundation/hardhat-ethers-chai-matchers": "3.0.11",
+    "@nomicfoundation/hardhat-mocha": "3.0.21",
+    "@types/mocha": "10.0.10",
+    "@types/node": "24.3.0",
+    "chai": "5.2.1",
+    "ethers": "6.15.0",
+    "hardhat": "3.16.0",
+    "mocha": "11.7.2",
+    "typescript": "5.9.2"
+  },
+  "engines": {
+    "node": ">=22.10.0 <26"
+  }
+}

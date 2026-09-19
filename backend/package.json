@@ -1,0 +1,33 @@
+{
+  "name": "agentid-backend",
+  "version": "2.0.0",
+  "private": true,
+  "description": "AgentID EIP-712 authentication and communication backend",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "demo:auth": "tsx src/demo/auth-demo.ts"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "dependencies": {
+    "dotenv": "17.2.2",
+    "ethers": "6.15.0",
+    "express": "5.1.0",
+    "zod": "4.1.5"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.3",
+    "@types/node": "24.3.0",
+    "@types/supertest": "6.0.3",
+    "supertest": "7.1.4",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+blockchain/node_modules/
+.tools/
+.npm-cache/
+
+# Hardhat generated files
+blockchain/artifacts/
+blockchain/cache/
+blockchain/typechain-types/
+blockchain/coverage/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and operating-system files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.idea/
+.vscode/
