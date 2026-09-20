@@ -7,6 +7,8 @@ export interface DeploymentManifest {
   contractName: "AgentRegistry";
   address: string;
   deployedAtBlock: number;
+  deploymentTransactionHash?: string;
+  deployerAddress?: string;
   abiArtifact: string;
 }
 

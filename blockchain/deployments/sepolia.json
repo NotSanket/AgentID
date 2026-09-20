@@ -1,0 +1,10 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "address": "0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a",
+  "deployedAtBlock": 11743199,
+  "deploymentTransactionHash": "0xf0acd62780f43a98338d69148d45673c5124ec463174831599367f36fd297644",
+  "deployerAddress": "0x77eEeCC3C47dAB02c8ba237AE52Be203CE454f86",
+  "contractName": "AgentRegistry",
+  "abiArtifact": "../artifacts/contracts/AgentRegistry.sol/AgentRegistry.json"
+}

@@ -17,6 +17,8 @@ async function main() {
     chainId: Number(networkDetails.chainId),
     address,
     deployedAtBlock: receipt?.blockNumber ?? 0,
+    deploymentTransactionHash: deploymentTransaction?.hash,
+    deployerAddress: deployer.address,
   });
 
   console.log("\nAgentID deployment complete");
@@ -25,6 +27,8 @@ async function main() {
   console.log(`Chain ID: ${networkDetails.chainId}`);
   console.log(`Deployer: ${deployer.address}`);
   console.log(`Contract: ${address}`);
+  console.log(`Transaction: ${deploymentTransaction?.hash ?? "unavailable"}`);
+  console.log(`Block:    ${receipt?.blockNumber ?? "unavailable"}`);
   console.log(`Manifest: ${manifestPath}\n`);
 }
 
