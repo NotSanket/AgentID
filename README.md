@@ -99,7 +99,7 @@ npm test
 npm run build
 ```
 
-Expected results are 31 blockchain tests, 72 backend tests (the original 68 plus 4 Stage 4 trusted-origin tests), and 15 Stage 4 frontend tests.
+Current expected results are 31 blockchain tests, 115 backend tests, and 70 frontend tests.
 
 ## REST endpoints
 
@@ -118,8 +118,12 @@ Expected results are 31 blockchain tests, 72 backend tests (the original 68 plus
 - `GET /api/metadata/agents`
 - `GET /api/metadata/agents/:agentId`
 - `GET /api/security/scenarios`
+- `POST /api/security/scenarios/:scenario` (eight guarded local scenarios only)
+- `GET /api/stage7/trust-graph`
+- `GET /api/stage7/analytics?range=1h|24h|7d|all`
+- `GET /api/stage7/explorer`
 
-There is no HTTP endpoint that signs arbitrary data. See [backend/README.md](backend/README.md), [authentication documentation](docs/AUTHENTICATION.md), and [blockchain documentation](docs/BLOCKCHAIN.md).
+There is no HTTP endpoint that signs arbitrary data. See [backend/README.md](backend/README.md), [authentication documentation](docs/AUTHENTICATION.md), [Stage 7 platform guide](docs/STAGE7_PLATFORM.md), [Trust Graph](docs/TRUST_GRAPH.md), [Security Lab](docs/SECURITY_LAB.md), [Explorer](docs/EXPLORER.md), [Analytics](docs/ANALYTICS.md), and [blockchain documentation](docs/BLOCKCHAIN.md).
 
 ## Security model in one sentence
 

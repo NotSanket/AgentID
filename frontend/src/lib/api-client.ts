@@ -1,4 +1,4 @@
-import type { AgentMetadataInput, AgentRecord, AnalyticsSummary, AuditEvent, DemoWallet, EnrichedAgent, HealthResponse, IdentityContractConfig, IdentityLifecycleEvent, IdentityProfileInput, IdentityWriteResponse, ApiErrorBody, AgentRequest, CommunicationCapabilities, CommunicationResult, DemoCommunicationAgent, InteractionRecord, JsonValue, Pagination, PreparedCommunication } from "../types/api";
+import type { AgentMetadataInput, AgentRecord, AnalyticsSummary, AuditEvent, DemoWallet, EnrichedAgent, HealthResponse, IdentityContractConfig, IdentityLifecycleEvent, IdentityProfileInput, IdentityWriteResponse, ApiErrorBody, AgentRequest, CommunicationCapabilities, CommunicationResult, DemoCommunicationAgent, InteractionRecord, JsonValue, Pagination, PreparedCommunication, TrustGraphResponse, AdvancedAnalytics, AnalyticsRange, ExplorerResponse, SecurityScenarioInfo, SecurityScenarioId, SecurityScenarioResult } from "../types/api";
 
 // Live registry scans and Supabase analytics can overlap on first load.
 // Keep the UI bounded, while allowing those independent local calls to settle.
@@ -52,6 +52,11 @@ export class ApiClient {
   interactions(query: Record<string, string | number | undefined> = { limit: 50, offset: 0 }, signal?: AbortSignal) { return this.request<{ interactions: InteractionRecord[]; pagination: Pagination }>(`/api/interactions?${toQuery(query)}`, { signal }); }
   interaction(requestId: string, signal?: AbortSignal) { return this.request<{ interaction: InteractionRecord }>(`/api/interactions/${encodeURIComponent(requestId)}`, { signal }); }
   verifySigned(input: unknown) { return this.request<Record<string, unknown>>("/api/verify", { method: "POST", body: JSON.stringify(input) }, true); }
+  trustGraph(signal?: AbortSignal) { return this.request<TrustGraphResponse>("/api/stage7/trust-graph", { signal }); }
+  advancedAnalytics(range: AnalyticsRange, signal?: AbortSignal) { return this.request<AdvancedAnalytics>(`/api/stage7/analytics?range=${range}`, { signal }); }
+  explorer(query = "", signal?: AbortSignal) { return this.request<ExplorerResponse>(`/api/stage7/explorer?${toQuery({ limit: 10, query })}`, { signal }); }
+  securityScenarios(signal?: AbortSignal) { return this.request<{ scenarios: SecurityScenarioInfo[] }>("/api/security/scenarios", { signal }); }
+  runSecurityScenario(scenario: SecurityScenarioId) { return this.request<SecurityScenarioResult>(`/api/security/scenarios/${scenario}`, { method: "POST", body: "{}" }); }
 
   async request<T>(path: string, init: RequestInit = {}, acceptErrorBody = false): Promise<T> {
     const timeoutController = new AbortController();

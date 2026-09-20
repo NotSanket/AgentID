@@ -236,3 +236,35 @@ export interface CommunicationCapabilities {
 }
 
 export interface Pagination { total: number; limit: number; offset: number }
+
+export interface TrustGraphEdge { source: string; target: string; verified: number; blocked: number; actions: string[]; lastActivity: string }
+export interface TrustGraphResponse { nodes: (EnrichedAgent & { registrationBlock: number | null })[]; edges: TrustGraphEdge[]; metadataAvailable: boolean; warning?: string; source: string }
+export type AnalyticsRange = "1h" | "24h" | "7d" | "all";
+export interface AdvancedAnalytics {
+  range: AnalyticsRange; generatedAt: string;
+  metrics: { identities: number; activeIdentities: number; revokedIdentities: number; verificationAttempts: number; verifiedRequests: number; blockedRequests: number; successRate: number; interactions: number; uniqueActiveAgents: number };
+  verificationSeries: Array<{ timestamp: string; VERIFIED?: number; BLOCKED?: number }>;
+  interactionSeries: Array<{ timestamp: string; INTERACTION?: number }>;
+  blockedReasons: Array<{ label: string; value: number }>;
+  activeAgents: Array<{ label: string; value: number }>;
+  communicationPairs: Array<{ label: string; value: number }>;
+  lifecycleActivity: Array<{ label: string; value: number }>;
+  source: string;
+}
+export interface ExplorerResponse {
+  network: BlockchainHealth; contractAddress: string;
+  blocks: Array<{ number: number; hash: string; parentHash: string; timestamp: number; transactionCount: number }>;
+  events: IdentityLifecycleEvent[];
+  transactions: Array<{ hash: string; blockNumber: number; from: string; to: string; operation: IdentityLifecycleEvent["type"]; status: "CONFIRMED" | "FAILED"; gasUsed: string; timestamp: number; agentId: string; owner: string }>;
+  gasByOperation: Array<{ operation: string; count: number; averageGasUsed: string }>;
+  matches: { agents: AgentRecord[]; events: IdentityLifecycleEvent[]; transactions: ExplorerResponse["transactions"]; blocks: ExplorerResponse["blocks"] };
+  source: string;
+}
+export type SecurityScenarioId = "VALID" | "UNKNOWN_WALLET" | "IMPERSONATION" | "REVOKED_AGENT" | "REPLAY" | "EXPIRED" | "PAYLOAD_TAMPER" | "RECEIVER_TAMPER";
+export interface SecurityScenarioInfo { id: SecurityScenarioId; expectedCode: string; description: string }
+export interface SecurityScenarioResult extends SecurityScenarioInfo {
+  scenario: SecurityScenarioId; protectedAsExpected: boolean; durationMs: number; request: AgentRequest;
+  result: CommunicationResult; firstAttempt?: CommunicationResult;
+  checkpoints: Array<{ label: string; status: "PASS" | "BLOCKED" | "INFO"; detail: string }>;
+  guardrails: { developmentOnly: true; chainId: 31337; loopbackRpcOnly: true; arbitrarySigningDisabled: true };
+}

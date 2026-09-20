@@ -14,6 +14,8 @@ import { MetadataAuthorizationError, type MetadataService } from "./services/met
 import { DemoIdentityWriteService, IdentityWriteError } from "./services/identity-write-service.js";
 import { DEMO_RECEIVER_ACTIONS, type DemoCommunicationService } from "./services/demo-communication-service.js";
 import type { CommunicationPreparationService } from "./services/communication-preparation-service.js";
+import { SECURITY_SCENARIOS, type SecurityScenarioService } from "./services/security-scenario-service.js";
+import type { AnalyticsRange, Stage7InsightsService } from "./services/stage7-insights-service.js";
 
 const paginationFields = {
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -62,6 +64,17 @@ const authorizedMetadataSchema = z.object({
     issuedAt: z.number().int().positive(),
   }),
 });
+const LEGACY_SECURITY_SCENARIOS = [
+  { id: "VALID", expectedCode: "VERIFIED", description: "Registered active wallet signs an unchanged request." },
+  { id: "UNKNOWN_WALLET", expectedCode: "UNKNOWN_WALLET", description: "An unregistered wallet signs the request." },
+  { id: "IMPERSONATION", expectedCode: "WALLET_MISMATCH", description: "Another registered wallet claims TravelAI's AgentID." },
+  { id: "REVOKED_AGENT", expectedCode: "AGENT_REVOKED", description: "Correct wallet signs after its identity is revoked." },
+  { id: "EXPIRED_REQUEST", expectedCode: "REQUEST_EXPIRED", description: "A valid signature carries an old timestamp." },
+  { id: "REPLAY_ATTACK", expectedCode: "NONCE_REUSED", description: "An accepted nonce is submitted again." },
+  { id: "MODIFIED_PAYLOAD", expectedCode: "UNKNOWN_WALLET", description: "The payload is changed after signing." },
+  { id: "MODIFIED_RECEIVER", expectedCode: "UNKNOWN_WALLET", description: "The receiver is changed after signing." },
+  { id: "MALFORMED_SIGNATURE", expectedCode: "INVALID_SIGNATURE", description: "The signature cannot be decoded safely." },
+] as const;
 
 export interface ApiBlockchain extends RegistryReader {
   health(): Promise<BlockchainHealth>;
@@ -80,6 +93,8 @@ export interface AppDependencies {
   metadata: MetadataService;
   demoWrites?: DemoIdentityWriteService;
   demoCommunication?: DemoCommunicationService;
+  stage7Insights?: Stage7InsightsService;
+  securityScenarios?: SecurityScenarioService;
   persistenceStatus: PersistenceStatus;
   frontendOrigins?: readonly string[];
 }
@@ -247,6 +262,25 @@ export function createApp(dependencies: AppDependencies) {
     response.json(await dependencies.analytics.security());
   });
 
+  app.get("/api/stage7/trust-graph", async (_request, response) => {
+    if (!dependencies.stage7Insights) { response.status(503).json({ code: "SERVICE_UNAVAILABLE", reason: "Trust Graph is unavailable." }); return; }
+    response.json(await dependencies.stage7Insights.trustGraph());
+  });
+
+  app.get("/api/stage7/analytics", async (request, response) => {
+    if (!dependencies.stage7Insights) { response.status(503).json({ code: "SERVICE_UNAVAILABLE", reason: "Advanced analytics is unavailable." }); return; }
+    const parsed = z.enum(["1h", "24h", "7d", "all"]).default("24h").safeParse(request.query.range);
+    if (!parsed.success) { response.status(400).json({ code: "INVALID_RANGE", reason: "Use 1h, 24h, 7d, or all." }); return; }
+    response.json(await dependencies.stage7Insights.analytics(parsed.data as AnalyticsRange));
+  });
+
+  app.get("/api/stage7/explorer", async (request, response) => {
+    if (!dependencies.stage7Insights) { response.status(503).json({ code: "SERVICE_UNAVAILABLE", reason: "Explorer is unavailable." }); return; }
+    const parsed = z.object({ limit: z.coerce.number().int().min(1).max(25).default(8), query: z.string().trim().max(128).default("") }).safeParse(request.query);
+    if (!parsed.success) { response.status(400).json({ code: "INVALID_QUERY", reason: "Explorer query parameters are invalid." }); return; }
+    response.json(await dependencies.stage7Insights.explorer(parsed.data.limit, parsed.data.query));
+  });
+
   app.get("/api/metadata/agents", async (_request, response) => {
     response.json({ agents: await dependencies.metadata.list() });
   });
@@ -328,17 +362,14 @@ export function createApp(dependencies: AppDependencies) {
   });
 
   app.get("/api/security/scenarios", (_request, response) => {
-    response.json({ scenarios: [
-      { id: "VALID", expectedCode: "VERIFIED", description: "Registered active wallet signs an unchanged request." },
-      { id: "UNKNOWN_WALLET", expectedCode: "UNKNOWN_WALLET", description: "An unregistered wallet signs the request." },
-      { id: "IMPERSONATION", expectedCode: "WALLET_MISMATCH", description: "A registered wallet for another agent claims TravelAI's AgentID." },
-      { id: "REVOKED_AGENT", expectedCode: "AGENT_REVOKED", description: "Correct wallet signs after its on-chain identity is revoked." },
-      { id: "EXPIRED_REQUEST", expectedCode: "REQUEST_EXPIRED", description: "A valid signature carries an old timestamp." },
-      { id: "REPLAY_ATTACK", expectedCode: "NONCE_REUSED", description: "An already accepted nonce is submitted again." },
-      { id: "MODIFIED_PAYLOAD", expectedCode: "UNKNOWN_WALLET", description: "The payload is changed after the request is signed, so recovery no longer yields the registered signer." },
-      { id: "MODIFIED_RECEIVER", expectedCode: "UNKNOWN_WALLET", description: "The receiver AgentID is changed after signing, so recovery no longer yields the registered signer." },
-      { id: "MALFORMED_SIGNATURE", expectedCode: "INVALID_SIGNATURE", description: "The signature cannot be decoded safely." },
-    ] });
+    response.json({ scenarios: dependencies.securityScenarios?.list() ?? LEGACY_SECURITY_SCENARIOS });
+  });
+
+  app.post("/api/security/scenarios/:scenario", async (request, response) => {
+    if (!dependencies.securityScenarios) { response.status(503).json({ code: "SECURITY_LAB_DISABLED", reason: "Security Lab execution is unavailable." }); return; }
+    const parsed = z.enum(SECURITY_SCENARIOS).safeParse(request.params.scenario);
+    if (!parsed.success) { response.status(404).json({ code: "UNKNOWN_SCENARIO", reason: "Only the predefined Security Lab scenarios may be executed." }); return; }
+    response.json(await dependencies.securityScenarios.run(parsed.data));
   });
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {

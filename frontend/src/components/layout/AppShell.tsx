@@ -11,6 +11,7 @@ import { MobileNavigation } from "./MobileNavigation";
 import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
 import { IdentitySessionProvider } from "../identity/IdentitySessionProvider";
+import { GuidedDemo } from "../system/GuidedDemo";
 
 export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -40,6 +41,7 @@ export function AppShell() {
           </AnimatePresence>
         </main>
         <GlobalStatusBar />
+        <GuidedDemo />
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
         <SideDrawer open={notificationsOpen} onClose={() => setNotificationsOpen(false)} title="Notifications"><EmptyState title="No notifications yet" description="Identity, verification, and network events will appear here when their modules are connected." kind="activity" /></SideDrawer>
         <MobileNavigation open={mobileOpen} onClose={() => setMobileOpen(false)} />

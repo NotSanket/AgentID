@@ -1,6 +1,6 @@
 # AgentID Project Context
 
-This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 6 implementation on 2026-09-20. Future changes should update this document when the implemented architecture or verified results change.
+This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 7 implementation on 2026-09-20. Future changes should update this document when the implemented architecture or verified results change.
 
 ## Project Goal
 
@@ -526,7 +526,7 @@ See `docs/COMMUNICATION.md` for the beginner-friendly communication guide.
 - Supabase requires the committed migration and metadata seed to be run manually for a new project.
 - A local Hardhat chain and all of its deployed contract state reset whenever that local chain is restarted. Run the localhost seed again and use the refreshed deployment manifest.
 - The demo uses unlocked local Hardhat accounts only. It must not be used with real funds.
-- The frontend production build currently emits a non-failing warning because the main JavaScript chunk is about 824 kB before gzip (about 267 kB gzip). Route-level code splitting is a later optimization; it does not affect Stage 6 correctness.
+- Stage 7 route-level code splitting now emits separate Trust Graph, Security Lab, Explorer, and Analytics chunks. Any remaining production-build warning is recorded with the current verification results.
 
 ## Git Checkpoint
 
@@ -579,12 +579,27 @@ Stage 5 is complete. The core identity routes use real AgentRegistry state and r
 
 Stage 6 is complete. Agent-to-agent requests use the existing EIP-712 schema and Stage 2 authentication-before-routing service. Verified interactions and all authentication attempts use the existing Stage 3 persistence stores. The communication page, replay and revoked-agent demonstrations, two-step travel workflow, Command Center metrics, Passport summary, automated tests, live Supabase-backed E2E verification, and responsive QA are complete.
 
+## Stage 7 Status
+
+Stage 7 is complete. It adds:
+
+- a Trust Graph built from current on-chain identities, persisted verified interactions, and persisted blocked authentication events, without a trust-score claim;
+- a development-only, loopback-only, chain-31337-only Security Lab with exactly eight executable scenarios and no arbitrary signing surface;
+- a local-chain Explorer with current network and contract details, recent blocks, decoded AgentRegistry lifecycle events, transaction receipts, search, and receipt-derived gas insights;
+- backend-aggregated analytics over registry, audit, interaction, and lifecycle records with one-hour, 24-hour, seven-day, and all-time ranges;
+- expanded Command Center intelligence, a reusable real activity feed, guided presentation navigation, lazy-loaded Stage 7 routes, responsive styling, and focused automated tests.
+
+Live verification on 2026-09-20 used local Hardhat chain `31337`, AgentRegistry `0x5FbDB2315678afecb367f032d93F642f64180aa3`, and the configured Supabase-backed backend. All eight Security Lab scenarios returned their exact expected codes. The valid request executed the receiver; all seven attack scenarios blocked receiver execution. Trust Graph, Explorer, and Analytics returned real records. Browser checks at 1920, 1440, 1366, 1024, 768, and 390 CSS pixels found no horizontal overflow.
+
+Final verification passed **31 / 31 blockchain tests**, **115 / 115 backend tests**, and **70 / 70 frontend tests**, plus all three TypeScript checks, Solidity compilation, and the frontend production build. The final build emitted separate lazy chunks for Analytics (5.70 kB), Security Lab (5.99 kB), Trust Graph (7.71 kB), and Explorer (8.80 kB). The initial JavaScript chunk is 829.33 kB (268.34 kB gzip), so Vite's non-failing 500 kB chunk-size advisory remains.
+
+See `docs/STAGE7_PLATFORM.md` for setup, route, data-source, guardrail, and verification details. Focused guides are in `docs/TRUST_GRAPH.md`, `docs/SECURITY_LAB.md`, `docs/EXPLORER.md`, and `docs/ANALYTICS.md`.
+
 ## Next Stage
 
-Stage 7 - Trust Graph, Security Lab, Explorer, and expanded analytics.
+Stage 8 - QA, edge cases, and polish.
 
 ## Future Stages
 
-- Stage 7 — Trust Graph, Security Lab, Explorer, and analytics.
 - Stage 8 — QA, edge cases, and polish.
 - Stage 9 — final demo and documentation.

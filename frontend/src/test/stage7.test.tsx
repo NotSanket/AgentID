@@ -1,0 +1,61 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { routes } from "../app/router";
+import { onlineHealth } from "./fixtures";
+
+const agents = [
+  { agentId: "AGT-TRAVEL-001", name: "TravelAI", displayName: "TravelAI", organization: "AgentID Travel", owner: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", metadataURI: "agentid://travel", registeredAt: "1", updatedAt: "1", status: "Active", blockchainStatus: "Active", description: "Travel planner", category: "Travel", capabilities: ["PLAN_TRIP"], avatarKey: null, accentTheme: null, registrationBlock: 1 },
+  { agentId: "AGT-HOTEL-001", name: "HotelAI", displayName: "HotelAI", organization: "AgentID Hotels", owner: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", metadataURI: "agentid://hotel", registeredAt: "1", updatedAt: "1", status: "Active", blockchainStatus: "Active", description: "Hotel search", category: "Hospitality", capabilities: ["SEARCH_HOTELS"], avatarKey: null, accentTheme: null, registrationBlock: 2 },
+  { agentId: "AGT-PAYMENT-001", name: "PaymentAI", displayName: "PaymentAI", organization: "AgentID Payments", owner: "0x90F79bf6EB2c4f870365E785982E1f101E93b906", metadataURI: "agentid://payment", registeredAt: "1", updatedAt: "1", status: "Revoked", blockchainStatus: "Revoked", description: null, category: "Payments", capabilities: ["AUTHORIZE_PAYMENT"], avatarKey: null, accentTheme: null, registrationBlock: 3 },
+];
+const scenarioCodes = {
+  VALID: "VERIFIED",
+  UNKNOWN_WALLET: "UNKNOWN_WALLET",
+  IMPERSONATION: "WALLET_MISMATCH",
+  REVOKED_AGENT: "AGENT_REVOKED",
+  REPLAY: "NONCE_REUSED",
+  EXPIRED: "REQUEST_EXPIRED",
+  PAYLOAD_TAMPER: "UNKNOWN_WALLET",
+  RECEIVER_TAMPER: "UNKNOWN_WALLET",
+} as const;
+const scenarios = Object.entries(scenarioCodes).map(([id, expectedCode]) => ({ id, expectedCode, description: `${id} controlled test` }));
+
+function stage7Fetch() {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input); const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+    if (url.endsWith("/api/health")) return json(onlineHealth);
+    if (url.endsWith("/api/stage7/trust-graph")) return json({ nodes: agents, edges: [{ source: "AGT-TRAVEL-001", target: "AGT-HOTEL-001", verified: 3, blocked: 1, actions: ["SEARCH_HOTELS"], lastActivity: "2026-09-20T00:00:00.000Z" }], metadataAvailable: true, source: "ON_CHAIN_REGISTRY_AND_PERSISTED_AUTHENTICATION_ACTIVITY" });
+    if (url.includes("/api/stage7/analytics")) return json({ range: new URL(url).searchParams.get("range"), generatedAt: "2026-09-20T00:00:00.000Z", metrics: { identities: 3, activeIdentities: 2, revokedIdentities: 1, verificationAttempts: 4, verifiedRequests: 3, blockedRequests: 1, successRate: 75, interactions: 3 }, verificationSeries: [{ timestamp: "2026-09-20T00:00:00.000Z", VERIFIED: 3, BLOCKED: 1 }], interactionSeries: [{ timestamp: "2026-09-20T00:00:00.000Z", INTERACTION: 3 }], blockedReasons: [{ label: "NONCE_REUSED", value: 1 }], activeAgents: [{ label: "AGT-TRAVEL-001", value: 3 }], communicationPairs: [{ label: "AGT-TRAVEL-001 → AGT-HOTEL-001", value: 3 }], lifecycleActivity: [{ label: "Registered", value: 3 }], source: "REGISTRY_AUDIT_INTERACTIONS_AND_BLOCKCHAIN_EVENTS" });
+    if (url.includes("/api/stage7/explorer")) return json({ network: onlineHealth.blockchain, contractAddress: onlineHealth.blockchain.registryAddress, blocks: [{ number: 12, hash: `0x${"1".repeat(64)}`, parentHash: `0x${"2".repeat(64)}`, timestamp: 2_000_000_000, transactionCount: 1 }], events: [{ type: "Registered", agentId: "AGT-TRAVEL-001", owner: agents[0].owner, timestamp: "2000000000", blockNumber: 1, transactionHash: `0x${"3".repeat(64)}` }], transactions: [{ hash: `0x${"3".repeat(64)}`, blockNumber: 1, from: agents[0].owner, to: onlineHealth.blockchain.registryAddress, operation: "Registered", status: "CONFIRMED", gasUsed: "88321", timestamp: 2_000_000_000, agentId: "AGT-TRAVEL-001", owner: agents[0].owner }], gasByOperation: [{ operation: "Registered", count: 1, averageGasUsed: "88321" }], matches: url.includes("Travel") ? { agents: [agents[0]], events: [], transactions: [], blocks: [] } : { agents: [], events: [], transactions: [], blocks: [] }, source: "LOCAL_ETHEREUM_RPC" });
+    if (url.endsWith("/api/security/scenarios")) return json({ scenarios });
+    if (url.includes("/api/security/scenarios/")) { const scenario = url.split("/").at(-1)! as keyof typeof scenarioCodes; const blocked = scenario !== "VALID"; const code = scenarioCodes[scenario]; return json({ scenario, expectedCode: code, description: scenario, protectedAsExpected: true, durationMs: 12, request: { requestId: "LAB-1", senderAgentId: "AGT-TRAVEL-001", receiverAgentId: "AGT-HOTEL-001", action: "SEARCH_HOTELS", payload: { city: "Chennai" }, timestamp: 2_000_000_000, nonce: "lab-1" }, result: { delivered: !blocked, receiverExecuted: !blocked, verification: { verified: !blocked, code, reason: blocked ? "Blocked" : "Verified", checks: { signatureValid: true, senderExists: true, receiverExists: true, receiverActive: true, walletMatches: !blocked, identityActive: true, timestampValid: true, nonceUnused: scenario !== "REPLAY" } } }, checkpoints: [{ label: "Authentication decision", status: blocked ? "BLOCKED" : "PASS", detail: code }, { label: "Receiver execution gate", status: blocked ? "BLOCKED" : "PASS", detail: blocked ? "Receiver execution was prevented." : "Receiver executed only after verification." }], guardrails: { developmentOnly: true, chainId: 31337, loopbackRpcOnly: true, arbitrarySigningDisabled: true } }); }
+    return json({ code: "NOT_FOUND", reason: url }, 404);
+  });
+}
+function renderRoute(path: string) { const router = createMemoryRouter(routes, { initialEntries: [path] }); render(<RouterProvider router={router} />); return router; }
+afterEach(() => vi.restoreAllMocks());
+
+describe("Stage 7 platform intelligence", () => {
+  it("lazy-loads the real Trust Graph route", async () => { stage7Fetch(); renderRoute("/app/trust-graph"); expect(await screen.findByRole("heading", { name: "Trust Graph" })).toBeInTheDocument(); expect(screen.queryByText(/coming online/i)).not.toBeInTheDocument(); });
+  it("renders registered graph nodes and real edge totals", async () => { stage7Fetch(); renderRoute("/app/trust-graph"); expect(await screen.findByRole("button", { name: /TravelAI/ })).toBeInTheDocument(); expect(screen.getByText("3 verified")).toBeInTheDocument(); expect(screen.getByText("1 blocked")).toBeInTheDocument(); });
+  it("filters Trust Graph identities by status", async () => { stage7Fetch(); const user = userEvent.setup(); renderRoute("/app/trust-graph"); await screen.findByRole("button", { name: /TravelAI/ }); await user.selectOptions(screen.getByLabelText("Filter identity status"), "Revoked"); expect(screen.getByRole("button", { name: /PaymentAI/ })).toBeInTheDocument(); expect(screen.queryByRole("button", { name: /TravelAI/ })).not.toBeInTheDocument(); });
+  it("opens a Trust Graph identity detail without reputation claims", async () => { stage7Fetch(); const user = userEvent.setup(); renderRoute("/app/trust-graph"); await user.click(await screen.findByRole("button", { name: /TravelAI/ })); expect(screen.getByText("Selected identity")).toBeInTheDocument(); expect(screen.getByText("Observed edges")).toBeInTheDocument(); expect(screen.getByText(/No inferred reputation or trust score/i)).toBeInTheDocument(); });
+  it("lists exactly eight guarded Security Lab scenarios", async () => { stage7Fetch(); renderRoute("/app/security"); expect(await screen.findByRole("heading", { name: "Security Lab", level: 2 })).toBeInTheDocument(); await screen.findByRole("button", { name: /VALID controlled test/ }); expect(scenarios.every((item) => screen.getByRole("button", { name: new RegExp(item.id.replaceAll("_", " ")) }))).toBe(true); expect(screen.getByText(/No arbitrary payload signing/i)).toBeInTheDocument(); });
+  it("executes the valid scenario through the controlled endpoint", async () => { const spy = stage7Fetch(); const user = userEvent.setup(); renderRoute("/app/security"); await user.click(await screen.findByRole("button", { name: "Run controlled scenario" })); expect(await screen.findByText("Protection behaved as expected")).toBeInTheDocument(); expect(screen.getByText("VERIFIED", { selector: ".status-badge" })).toBeInTheDocument(); expect(spy.mock.calls.some(([url, init]) => String(url).endsWith("/VALID") && init?.method === "POST")).toBe(true); });
+  it("renders blocked receiver evidence for replay", async () => { stage7Fetch(); const user = userEvent.setup(); renderRoute("/app/security"); await user.click(await screen.findByRole("button", { name: /REPLAY/ })); await user.click(screen.getByRole("button", { name: "Run controlled scenario" })); expect(await screen.findByText("NONCE_REUSED", { selector: ".status-badge" })).toBeInTheDocument(); expect(screen.getByText("NO")).toBeInTheDocument(); });
+  it.each([
+    ["UNKNOWN_WALLET", "UNKNOWN_WALLET"],
+    ["IMPERSONATION", "WALLET_MISMATCH"],
+    ["REVOKED_AGENT", "AGENT_REVOKED"],
+    ["EXPIRED", "REQUEST_EXPIRED"],
+    ["PAYLOAD_TAMPER", "UNKNOWN_WALLET"],
+    ["RECEIVER_TAMPER", "UNKNOWN_WALLET"],
+  ])("shows %s as blocked without receiver execution", async (scenario, expectedCode) => { stage7Fetch(); const user = userEvent.setup(); renderRoute("/app/security"); await user.click(await screen.findByRole("button", { name: new RegExp(scenario.replaceAll("_", " ")) })); await user.click(screen.getByRole("button", { name: "Run controlled scenario" })); expect(await screen.findByText(expectedCode, { selector: ".status-badge" })).toBeInTheDocument(); expect(screen.getByText("NO")).toBeInTheDocument(); });
+  it("renders Explorer network, contract, blocks, receipts, events, and gas", async () => { stage7Fetch(); renderRoute("/app/explorer"); expect(await screen.findByRole("heading", { name: "AgentID Explorer", level: 2 })).toBeInTheDocument(); expect(await screen.findByText("Block 12", {}, { timeout: 3000 })).toBeInTheDocument(); expect(screen.getByText(/avg gas/)).toHaveTextContent(/88.?321/); expect(screen.getAllByText("AGT-TRAVEL-001")).toHaveLength(2); });
+  it("searches the Explorer through the bounded backend query", async () => { const spy = stage7Fetch(); renderRoute("/app/explorer"); const input = await screen.findByLabelText("Search blockchain explorer"); fireEvent.change(input, { target: { value: "Travel" } }); await waitFor(() => expect(spy.mock.calls.some(([url]) => String(url).includes("query=Travel"))).toBe(true)); expect(await screen.findByText("Matching on-chain records")).toBeInTheDocument(); });
+  it("renders real advanced analytics metrics and breakdowns", async () => { stage7Fetch(); renderRoute("/app/analytics"); expect(await screen.findByRole("heading", { name: "Advanced Analytics", level: 2 })).toBeInTheDocument(); expect(await screen.findByText("75%", {}, { timeout: 3000 })).toBeInTheDocument(); expect(screen.getByText("NONCE_REUSED")).toBeInTheDocument(); expect(screen.getByText("AGT-TRAVEL-001 → AGT-HOTEL-001")).toBeInTheDocument(); });
+  it("changes the analytics time range and refetches", async () => { const spy = stage7Fetch(); const user = userEvent.setup(); renderRoute("/app/analytics"); await screen.findByText("75%"); await user.click(screen.getByRole("button", { name: "7 days" })); await waitFor(() => expect(spy.mock.calls.some(([url]) => String(url).includes("range=7d"))).toBe(true)); });
+  it("offers guided navigation without auto-running security actions", async () => { const spy = stage7Fetch(); const user = userEvent.setup(); renderRoute("/app/trust-graph"); await screen.findByRole("heading", { name: "Trust Graph", level: 2 }); await user.click(screen.getByRole("button", { name: "Guided demo" })); expect(screen.getAllByRole("link", { name: /Security Lab/ })).toHaveLength(2); expect(spy.mock.calls.some(([url],) => String(url).includes("/api/security/scenarios/") && !String(url).endsWith("scenarios"))).toBe(false); });
+});

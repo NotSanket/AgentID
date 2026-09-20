@@ -10,6 +10,8 @@ import { createApp } from "./app.js";
 import { DemoIdentityWriteService } from "./services/identity-write-service.js";
 import { CommunicationPreparationService } from "./services/communication-preparation-service.js";
 import { DemoCommunicationService } from "./services/demo-communication-service.js";
+import { Stage7InsightsService } from "./services/stage7-insights-service.js";
+import { SecurityScenarioService } from "./services/security-scenario-service.js";
 
 export async function bootstrap() {
   const config = loadRuntimeConfig();
@@ -28,6 +30,8 @@ export async function bootstrap() {
   const metadata = new MetadataService(blockchain, persistence.metadataStore);
   const demoWrites = new DemoIdentityWriteService(blockchain, metadata, config);
   const demoCommunication = new DemoCommunicationService(blockchain, communication, config);
+  const stage7Insights = new Stage7InsightsService(blockchain, metadata, persistence.auditStore, persistence.interactionStore);
+  const securityScenarios = new SecurityScenarioService(blockchain, communication, config);
   const app = createApp({
     blockchain,
     authentication,
@@ -39,6 +43,8 @@ export async function bootstrap() {
     metadata,
     demoWrites,
     demoCommunication,
+    stage7Insights,
+    securityScenarios,
     persistenceStatus: persistence.status,
     frontendOrigins: config.frontendOrigins,
   });
@@ -53,6 +59,8 @@ export async function bootstrap() {
     metadata,
     demoWrites,
     demoCommunication,
+    stage7Insights,
+    securityScenarios,
     ...persistence,
   };
 }
