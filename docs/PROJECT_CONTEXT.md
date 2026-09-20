@@ -631,7 +631,7 @@ Final regression passed **31 / 31 blockchain tests**, **118 / 118 backend tests*
 
 ## Stage 9 Status
 
-Stage 9 is in progress. The existing AgentRegistry is deployed to Ethereum Sepolia at `0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a` on chain `11155111`, with deployment block `11743199`. The public backend and frontend are live, and TravelAI (`AGT-TRAVEL-001`) is the first public Active identity. HotelAI and PaymentAI remain pending manual, wallet-owned registration and must not be fabricated by application code.
+Stage 9 implementation and production hardening are complete. The existing AgentRegistry is deployed to Ethereum Sepolia at `0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a` on chain `11155111`, with deployment block `11743199`. The public backend and frontend are live, and TravelAI (`AGT-TRAVEL-001`) is the first public Active identity. HotelAI and PaymentAI remain pending optional manual, wallet-owned registration and must not be fabricated by application code.
 
 ### Stage 9 production UX hardening
 
@@ -657,10 +657,12 @@ Ethereum remains authoritative. Supabase is only a persistent index of decoded, 
 
 For every completed block chunk, decoded lifecycle events are idempotently upserted before `last_scanned_block` advances. The event key is `(chain_id, contract_address, transaction_hash, log_index)`. If the cursor update fails after event insertion, replaying the chunk is safe. Empty chunks also advance the checkpoint, so the current empty public registry does not trigger a full deployment-to-latest rescan after every backend restart. A cold start loads the namespaced checkpoint and indexed history, then asks Sepolia only for `last_scanned_block + 1` through the latest block. A failed storage operation never advances the in-memory cursor or discards an earlier valid memory snapshot.
 
-The migration `supabase/migrations/202609200001_chain_event_index.sql` creates `chain_event_index` and `chain_indexer_state`, applies RLS and server-only permissions, and prevents checkpoint regression. It must be applied manually to the configured Supabase project before public backend deployment. Until it is applied, the startup health check safely selects in-memory persistence and reports its existing warning; no migration is considered live merely because the SQL file is committed.
+The migration `supabase/migrations/202609200001_chain_event_index.sql` creates `chain_event_index` and `chain_indexer_state`, applies RLS and server-only permissions, and prevents checkpoint regression. It has been manually applied to the live Supabase project. The production health endpoint reports `persistenceMode: SUPABASE` and `supabaseConnected: true`.
 
-Read-only Sepolia verification on 2026-09-20 scanned deployment block `11743199` through block `11744788` in 159 bounded log requests and found the expected zero lifecycle events. The completed empty scan persisted checkpoint `11744788` in a shared repository test instance. A newly constructed reader then started at block `11744789` and made one incremental request instead of rescanning deployment history. The live Supabase tables were not created or mutated during this check; durable database verification remains pending the manual migration.
+Read-only Sepolia verification on 2026-09-20 initially scanned deployment block `11743199` through block `11744788` in 159 bounded log requests and found the then-empty registry. A newly constructed reader started at block `11744789` and made one incremental request instead of rescanning deployment history. After the live migration and public registration, the registry returned Active TravelAI with its registration lifecycle event at block `11745089`. The final read-only closure check found one public identity and made no chain or database mutation. The live API currently returns the stored organization spelling `Wanders Lab`; the supplied presentation label `Wander Labs` should not be used to overwrite the existing identity during closure.
 
-## Next Stage 9 Checkpoint
+## Stage 9 Final Closure
 
-Apply the committed chain-event-index migration manually in Supabase, verify the public zero-identity index and restart checkpoint, and only then continue the separately reviewed hosting checklist. Public seeding and demo signing remain disabled.
+The public architecture is Browser Wallet → Sepolia AgentRegistry → Render verification API → Supabase persistent metadata/audit/index → Vercel interface. Production demo signing remains disabled, Local Demo Wallet endpoints remain unavailable, exact-origin CORS remains enforced, and no production agent private key is held by the backend. Public communication requires a real owner-controlled browser-wallet signature; distinct owners may need to switch MetaMask accounts. Security Lab execution remains an explicitly guarded local Hardhat capability, while the public UI documents the tested scenarios without fabricating execution.
+
+Final presentation and operations references are `docs/FINAL_DEMO.md` and `docs/PRODUCTION_DEPLOYMENT.md`. No automatic Render/Vercel deployment, Supabase mutation, contract deployment, or identity registration is part of this closure commit.
