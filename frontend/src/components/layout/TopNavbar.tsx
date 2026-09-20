@@ -16,7 +16,7 @@ export function TopNavbar({ onOpenPalette, onOpenNotifications, onOpenMobile }: 
         <button className="command-trigger" type="button" onClick={onOpenPalette} aria-label="Open command palette"><Search size={16} /><span>Search console</span><kbd><Command size={11} /> K</kbd></button>
         <NetworkStatus />
         <button className="icon-button" type="button" onClick={onOpenNotifications} aria-label="Open notifications"><Bell /><span className="notification-dot" /></button>
-        <button className="profile-button" type="button" aria-label="Demo operator profile"><span>DO</span><span className="profile-copy"><strong>Demo Operator</strong><small>Local workspace</small></span></button>
+        <button className="profile-button" type="button" aria-label="Portal operator profile"><span>PO</span><span className="profile-copy"><strong>Portal Operator</strong><small>Browser workspace</small></span></button>
       </div>
     </header>
   );

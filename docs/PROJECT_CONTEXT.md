@@ -631,7 +631,15 @@ Final regression passed **31 / 31 blockchain tests**, **118 / 118 backend tests*
 
 ## Stage 9 Status
 
-Stage 9 is in progress. The existing AgentRegistry is deployed to Ethereum Sepolia at `0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a` on chain `11155111`, with deployment block `11743199`. Public backend and frontend hosting have not been deployed, and the public registry remains intentionally unseeded.
+Stage 9 is in progress. The existing AgentRegistry is deployed to Ethereum Sepolia at `0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a` on chain `11155111`, with deployment block `11743199`. The public backend and frontend are live, and TravelAI (`AGT-TRAVEL-001`) is the first public Active identity. HotelAI and PaymentAI remain pending manual, wallet-owned registration and must not be fabricated by application code.
+
+### Stage 9 production UX hardening
+
+The public Command Center now treats a reachable Sepolia backend, expected chain `11155111`, reachable AgentRegistry, and connected Supabase persistence as production readiness. Disabled demo signing is an expected production guardrail rather than a failure; the explicitly enabled local Hardhat workflow retains its chain `31337` demo readiness behavior.
+
+Frontend API requests allow a bounded 75-second production window for a Render Free cold start while local development keeps its 12-second timeout. Health polling schedules the next bounded attempt only after the current request finishes, so a slow wake cannot create overlapping requests or a fake online state.
+
+Production Communication uses real public AgentRegistry identities for browser-wallet-owned EIP-712 requests. It does not add backend private-key signing, fake signatures, or fake interactions. The local demo signer remains development-only. Security Lab keeps its genuine scenario catalog visible but disables controlled execution when the development-only demo signer is unavailable. Explorer terminology now describes the connected Ethereum network and real chain evidence rather than assuming local Hardhat.
 
 ### Stage 9 public event scanning note
 

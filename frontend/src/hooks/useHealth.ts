@@ -24,11 +24,15 @@ export function useHealth(pollIntervalMs = 20_000) {
 
   useEffect(() => {
     const controller = new AbortController();
-    void refresh(controller.signal);
-    const intervalId = window.setInterval(() => void refresh(controller.signal), pollIntervalMs);
+    let timeoutId: number | undefined;
+    const poll = async () => {
+      await refresh(controller.signal);
+      if (!controller.signal.aborted) timeoutId = window.setTimeout(poll, pollIntervalMs);
+    };
+    void poll();
     return () => {
       controller.abort();
-      window.clearInterval(intervalId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     };
   }, [pollIntervalMs, refresh]);
 

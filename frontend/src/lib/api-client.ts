@@ -1,8 +1,9 @@
 import type { AgentMetadataInput, AgentRecord, AnalyticsSummary, AuditEvent, DemoWallet, EnrichedAgent, HealthResponse, IdentityContractConfig, IdentityLifecycleEvent, IdentityProfileInput, IdentityWriteResponse, ApiErrorBody, AgentRequest, CommunicationCapabilities, CommunicationResult, DemoCommunicationAgent, InteractionRecord, JsonValue, Pagination, PreparedCommunication, TrustGraphResponse, AdvancedAnalytics, AnalyticsRange, ExplorerResponse, SecurityScenarioInfo, SecurityScenarioId, SecurityScenarioResult } from "../types/api";
 
-// Live registry scans and Supabase analytics can overlap on first load.
-// Keep the UI bounded, while allowing those independent local calls to settle.
-const DEFAULT_TIMEOUT_MS = 12_000;
+// Render Free can need close to a minute to wake. Production requests wait through
+// that cold start; local development keeps the shorter feedback loop.
+export const apiTimeoutForEnvironment = (production: boolean) => production ? 75_000 : 12_000;
+const DEFAULT_TIMEOUT_MS = apiTimeoutForEnvironment(import.meta.env.PROD);
 const DEFAULT_API_BASE_URL = "http://localhost:4000";
 
 export class ApiError extends Error {

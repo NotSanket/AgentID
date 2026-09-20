@@ -82,7 +82,7 @@ export function LandingPage() {
 
         <section className="landing-cta"><div className="cta-grid" aria-hidden="true" /><span className="cta-icon"><Bot /></span><p className="eyebrow">THE TRUST LAYER IS READY</p><h2>Give every agent an identity<br />before it gets a voice.</h2><p>Enter the AgentID console and explore the foundation for verifiable agent-to-agent communication.</p><Link className="button button-primary button-large" to="/app">Launch AgentID Console <ArrowRight /></Link></section>
       </main>
-      <footer className="landing-footer"><Logo /><p>Verifiable identity infrastructure for autonomous AI agents.</p><span>STAGE 4 · VISUAL FOUNDATION</span></footer>
+      <footer className="landing-footer"><Logo /><p>Verifiable identity infrastructure for autonomous AI agents.</p><span>SEPOLIA · PUBLIC TESTNET</span></footer>
     </div>
   );
 }
