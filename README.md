@@ -2,7 +2,7 @@
 
 **A blockchain-based identity and request-authentication framework for collaborative AI agents.**
 
-Stage 1 binds a readable AgentID to an Ethereum wallet and records whether the identity is Active or Revoked. Stage 2 adds EIP-712 authentication and authenticated routing. Stage 3 adds optional Supabase/PostgreSQL persistence for off-chain application data while preserving a complete in-memory fallback. Stage 4 adds the premium React portal foundation.
+Stage 1 binds a readable AgentID to an Ethereum wallet and records whether the identity is Active or Revoked. Stages 2–3 add EIP-712 authentication, authenticated routing, and optional Supabase/PostgreSQL persistence. Stages 4–7 provide the complete identity portal, authenticated communication, Trust Graph, Security Lab, Explorer, and Analytics. Stage 8 completes final QA and deployment-readiness hardening without deploying the application.
 
 Identity verification does not prove that an agent is safe, truthful, intelligent, or well behaved.
 
@@ -22,8 +22,10 @@ Identity verification does not prove that an agent is safe, truthful, intelligen
 - real local authentication terminal demo;
 - premium React, TypeScript, Vite, Tailwind CSS, and Framer Motion frontend;
 - responsive landing page, console shell, command palette, reusable identity components, and live health status.
+- complete identity lifecycle, authenticated communication, Trust Graph, Security Lab, Explorer, and Analytics workflows;
+- production-oriented environment validation, route-level code splitting, a real local-demo readiness check, and documented deployment prerequisites.
 
-Stage 4 is a visual and application-shell foundation; the major identity workflows connect in Stage 5. There is no LLM integration. Supabase remains optional, and live persistence against the configured real project was verified on 2026-09-19, including persistence across a backend-only restart and replay blocking from the stored nonce.
+Stages 1–8 are implemented. There is no LLM integration and the project is **not publicly deployed**. Supabase remains optional, and live persistence against the configured real project was verified on 2026-09-19, including persistence across a backend-only restart and replay blocking from the stored nonce.
 
 ## Prerequisites
 
@@ -61,7 +63,7 @@ npm install
 npm run dev
 ```
 
-The API starts at `http://127.0.0.1:4000`. Check `GET /api/health` before sending requests. With the default environment it reports `persistenceMode: IN_MEMORY`. See [the Supabase guide](docs/SUPABASE.md) to enable persistent mode.
+The API starts at `http://127.0.0.1:4000`. Check `GET /api/health` before sending requests. With the example environment it reports `persistenceMode: IN_MEMORY`; the existing untracked `backend/.env` may select Supabase. See [the Supabase guide](docs/SUPABASE.md) to enable persistent mode.
 
 ### Terminal 4 — frontend
 
@@ -99,7 +101,7 @@ npm test
 npm run build
 ```
 
-Current expected results are 31 blockchain tests, 115 backend tests, and 70 frontend tests.
+Current expected results are 31 blockchain tests, 118 backend tests, and 74 frontend tests.
 
 ## REST endpoints
 
@@ -123,7 +125,7 @@ Current expected results are 31 blockchain tests, 115 backend tests, and 70 fron
 - `GET /api/stage7/analytics?range=1h|24h|7d|all`
 - `GET /api/stage7/explorer`
 
-There is no HTTP endpoint that signs arbitrary data. See [backend/README.md](backend/README.md), [authentication documentation](docs/AUTHENTICATION.md), [Stage 7 platform guide](docs/STAGE7_PLATFORM.md), [Trust Graph](docs/TRUST_GRAPH.md), [Security Lab](docs/SECURITY_LAB.md), [Explorer](docs/EXPLORER.md), [Analytics](docs/ANALYTICS.md), and [blockchain documentation](docs/BLOCKCHAIN.md).
+There is no HTTP endpoint that signs arbitrary data. See [backend/README.md](backend/README.md), [authentication documentation](docs/AUTHENTICATION.md), [Stage 7 platform guide](docs/STAGE7_PLATFORM.md), [deployment readiness](docs/DEPLOYMENT_READINESS.md), [Trust Graph](docs/TRUST_GRAPH.md), [Security Lab](docs/SECURITY_LAB.md), [Explorer](docs/EXPLORER.md), [Analytics](docs/ANALYTICS.md), and [blockchain documentation](docs/BLOCKCHAIN.md).
 
 ## Security model in one sentence
 

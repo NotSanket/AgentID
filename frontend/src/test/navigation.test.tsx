@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { AppShell } from "../components/layout/AppShell";
 import { Sidebar } from "../components/layout/Sidebar";
+import { GuidedDemo } from "../components/system/GuidedDemo";
 
 describe("console navigation", () => {
   it("expands and collapses the floating sidebar", async () => {
@@ -47,5 +48,20 @@ describe("console navigation", () => {
     expect(screen.getByLabelText("Mobile navigation")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Close navigation" }));
     await waitFor(() => expect(screen.queryByLabelText("Mobile navigation")).not.toBeInTheDocument());
+  });
+
+  it("provides non-destructive guided demo next, previous, and exit controls", async () => {
+    const user = userEvent.setup();
+    function Location() { return <span data-testid="guided-location">{useLocation().pathname}</span>; }
+    render(<MemoryRouter initialEntries={["/app"]}><GuidedDemo /><Location /></MemoryRouter>);
+    await user.click(screen.getByRole("button", { name: "Guided demo" }));
+    expect(screen.getByRole("link", { name: /Command Center/ })).toHaveAttribute("aria-current", "step");
+    expect(screen.getByRole("button", { name: /Previous/ })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /Next/ }));
+    expect(screen.getByTestId("guided-location")).toHaveTextContent("/app/registry");
+    await user.click(screen.getByRole("button", { name: /Previous/ }));
+    expect(screen.getByTestId("guided-location")).toHaveTextContent("/app");
+    await user.click(screen.getByRole("button", { name: "Exit Demo" }));
+    expect(screen.queryByLabelText("Guided demo navigation")).not.toBeInTheDocument();
   });
 });

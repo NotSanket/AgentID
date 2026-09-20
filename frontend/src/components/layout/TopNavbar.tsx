@@ -5,7 +5,9 @@ import { NetworkStatus } from "../system/NetworkStatus";
 
 export function TopNavbar({ onOpenPalette, onOpenNotifications, onOpenMobile }: { onOpenPalette: () => void; onOpenNotifications: () => void; onOpenMobile: () => void }) {
   const location = useLocation();
-  const current = allNavigation.find((item) => item.path === location.pathname)?.label ?? "Command Center";
+  const current = location.pathname.startsWith("/app/registry/")
+    ? "Agent Passport"
+    : allNavigation.find((item) => item.path === location.pathname)?.label ?? "Command Center";
   return (
     <header className="top-navbar">
       <button className="mobile-menu-trigger" type="button" onClick={onOpenMobile} aria-label="Open navigation"><Menu /></button>

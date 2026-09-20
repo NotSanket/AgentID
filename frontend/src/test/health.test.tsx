@@ -19,4 +19,15 @@ describe("NetworkStatus", () => {
     expect(await screen.findByText("SYSTEM OFFLINE")).toBeInTheDocument();
     expect(screen.getByText("BACKEND UNREACHABLE")).toBeInTheDocument();
   });
+
+  it("distinguishes a connected backend from an unavailable blockchain", async () => {
+    const degraded = {
+      status: "degraded", backend: "ok", persistenceMode: "IN_MEMORY", supabaseConnected: false, demoSigningEnabled: false,
+      blockchain: { connected: false, network: "localhost", chainId: null, expectedChainId: 31337, latestBlock: null, registryAddress: null, contractReachable: false, error: "RPC unavailable." },
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(degraded), { status: 503, headers: { "Content-Type": "application/json" } }));
+    render(<HealthProvider><NetworkStatus /></HealthProvider>);
+    expect(await screen.findByText("SYSTEM DEGRADED")).toBeInTheDocument();
+    expect(screen.getByText("BACKEND CONNECTED · BLOCKCHAIN UNAVAILABLE")).toBeInTheDocument();
+  });
 });

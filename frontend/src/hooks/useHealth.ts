@@ -5,7 +5,7 @@ import type { HealthResponse } from "../types/api";
 export type HealthState =
   | { phase: "loading"; data: null; error: null }
   | { phase: "online"; data: HealthResponse; error: null }
-  | { phase: "offline"; data: null; error: string };
+  | { phase: "offline"; data: HealthResponse | null; error: string };
 
 export function useHealth(pollIntervalMs = 20_000) {
   const [state, setState] = useState<HealthState>({ phase: "loading", data: null, error: null });
@@ -13,7 +13,9 @@ export function useHealth(pollIntervalMs = 20_000) {
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
       const data = await apiClient.health(signal);
-      setState({ phase: data.blockchain.connected ? "online" : "offline", data: data.blockchain.connected ? data : null, error: data.blockchain.error ?? "Blockchain unavailable." } as HealthState);
+      setState(data.blockchain.connected
+        ? { phase: "online", data, error: null }
+        : { phase: "offline", data, error: data.blockchain.error ?? "Blockchain unavailable." });
     } catch (error) {
       if (signal?.aborted) return;
       setState({ phase: "offline", data: null, error: error instanceof Error ? error.message : "System unavailable." });

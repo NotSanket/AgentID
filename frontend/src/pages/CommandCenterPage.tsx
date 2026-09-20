@@ -25,6 +25,7 @@ export function CommandCenterPage() {
   const active = agents.filter((agent) => agent.status === "Active").length; const revoked = agents.length - active;
   return <div className="page-stack command-center-page stage5-page">
     <section className="console-hero"><div><p className="eyebrow"><Sparkles size={13} /> Live identity operations</p><h2>Command Center</h2><p>Real AgentRegistry state, authenticated communication, and persisted security activity.</p></div><div className="console-hero-mark"><ShieldCheck /><span>TRUST<br />BOUNDARY</span></div></section>
+    <DemoReadiness health={health} />
     <section className="metric-grid identity-metrics" aria-label="Live identity metrics">{loading ? <><CardSkeleton /><CardSkeleton /><CardSkeleton /><CardSkeleton /></> : <><MetricStatus icon={Fingerprint} label="Registered Identities" value={String(agents.length)} tone="active" detail="Discovered from AgentRegistered events" /><MetricStatus icon={ShieldCheck} label="Active Identities" value={String(active)} tone="verified" detail="Current on-chain lifecycle state" /><MetricStatus icon={ShieldX} label="Revoked Identities" value={String(revoked)} tone={revoked ? "revoked" : "active"} detail="Rejected by authentication" /><MetricStatus icon={Activity} label="Verification Attempts" value={String(analytics?.totalVerificationAttempts ?? 0)} tone="verified" detail={`${analytics?.verifiedRequests ?? 0} verified · ${analytics?.blockedRequests ?? 0} blocked`} /><MetricStatus icon={RadioTower} label="Verified Interactions" value={String(analytics?.totalInteractions ?? 0)} tone="verified" detail="Authenticated receiver executions" /><MetricStatus icon={ShieldX} label="Blocked Communications" value={String(analytics?.blockedRequests ?? 0)} tone={analytics?.blockedRequests ? "revoked" : "active"} detail="Stopped before receiver execution" /><MetricStatus icon={TrendingUp} label="Authentication Success" value={`${analytics?.successRate ?? 0}%`} tone="verified" detail="Calculated from persistent audit records" /></>}</section>
     <section className="dashboard-grid">
       <ComponentSlot eyebrow="Unified real-time evidence" title="Recent platform activity">{failed ? <EmptyState kind="network" title="Activity unavailable" description="Start the local blockchain and backend to restore live records." /> : <ActivityFeed items={[...lifecycle.map((data) => ({ kind: "lifecycle" as const, data })), ...audit.map((data) => ({ kind: "audit" as const, data }))]} />}</ComponentSlot>
@@ -40,3 +41,28 @@ export function CommandCenterPage() {
 
 function MetricStatus({ icon: Icon, label, value, detail, tone }: { icon: typeof Bot; label: string; value: string; detail: string; tone: "active" | "verified" | "revoked" }) { return <article className="metric-card"><header><span><Icon /></span><StatusBadge tone={tone} label="LIVE" /></header><p>{label}</p><strong>{value}</strong><small>{detail}</small></article>; }
 function QuickAction({ to, icon: Icon, title, label }: { to: string; icon: typeof Bot; title: string; label: string }) { return <Link to={to}><span><Icon /></span><span><strong>{title}</strong><small>{label}</small></span><ArrowRight /></Link>; }
+
+function DemoReadiness({ health }: { health: ReturnType<typeof useSystemHealth> }) {
+  const data = health.data;
+  const backend = data?.backend === "ok";
+  const blockchain = Boolean(data?.blockchain.connected && data.blockchain.chainId === 31337);
+  const contract = Boolean(data?.blockchain.contractReachable && data.blockchain.registryAddress);
+  const persistence = Boolean(data && (data.persistenceMode === "IN_MEMORY" || data.supabaseConnected));
+  const signing = Boolean(data?.demoSigningEnabled);
+  const ready = backend && blockchain && contract && persistence && signing;
+  const checking = health.phase === "loading";
+  return <section className={`demo-readiness panel ${ready ? "is-ready" : "is-not-ready"}`} aria-label="Local demo readiness">
+    <header><div><p className="eyebrow">Teacher presentation check</p><h3>{checking ? "CHECKING DEMO" : ready ? "DEMO READY" : "DEMO NOT READY"}</h3><p>{ready ? "All dependencies required for the guarded local demonstration are healthy." : checking ? "Checking backend and local dependencies." : health.error ?? "One or more local dependencies need attention."}</p></div><StatusBadge tone={checking ? "pending" : ready ? "verified" : "blocked"} label={checking ? "CHECKING" : ready ? "READY" : "ATTENTION"} /></header>
+    <div className="demo-readiness-grid">
+      <ReadinessItem label="Backend" ready={backend} detail={backend ? "CONNECTED" : "UNAVAILABLE"} />
+      <ReadinessItem label="Blockchain" ready={blockchain} detail={data?.blockchain.chainId ? `CHAIN ${data.blockchain.chainId}` : "UNAVAILABLE"} />
+      <ReadinessItem label="AgentRegistry" ready={contract} detail={contract ? "REACHABLE" : "UNAVAILABLE"} />
+      <ReadinessItem label="Persistence" ready={persistence} detail={data ? data.persistenceMode === "SUPABASE" ? data.supabaseConnected ? "SUPABASE CONNECTED" : "SUPABASE UNAVAILABLE" : "IN-MEMORY READY" : "UNAVAILABLE"} />
+      <ReadinessItem label="Demo signing" ready={signing} detail={signing ? "LOCAL ONLY" : "DISABLED"} />
+    </div>
+  </section>;
+}
+
+function ReadinessItem({ label, ready, detail }: { label: string; ready: boolean; detail: string }) {
+  return <span><i className={ready ? "is-ready" : "is-unavailable"} /><strong>{label}</strong><small>{detail}</small></span>;
+}

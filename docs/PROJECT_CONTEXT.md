@@ -1,6 +1,6 @@
 # AgentID Project Context
 
-This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 7 implementation on 2026-09-20. Future changes should update this document when the implemented architecture or verified results change.
+This file is the durable source of truth for future AgentID work if chat history is unavailable. It describes the repository through the completed Stage 8 implementation on 2026-09-20. Future changes should update this document when the implemented architecture or verified results change.
 
 ## Project Goal
 
@@ -31,7 +31,7 @@ The current implementation has these layers:
 - strictly guarded local-Hardhat demo writes for teaching and development;
 - a real Registry, Digital Agent Passport, identity issuance wizard, verification workspace, and live Command Center.
 
-The Stage 6 authenticated communication product is implemented. Security simulation, graph, explorer, and expanded analytics visualization remain later-stage work. Supabase support is implemented, and Stage 3 persistence, Stage 5 identity metadata, and Stage 6 communication records have been verified against the configured real project.
+Stages 1–8 are implemented. This includes authenticated communication, the controlled Security Lab, Trust Graph, local-chain Explorer, stored-data Analytics, final resilience and responsive QA, and deployment-readiness configuration. Supabase support is implemented, and Stage 3 persistence plus Stage 5–8 workflows have been verified against the configured real project. The application has not been publicly deployed.
 
 ## Stage 1 — Blockchain Foundation
 
@@ -526,19 +526,18 @@ See `docs/COMMUNICATION.md` for the beginner-friendly communication guide.
 - Supabase requires the committed migration and metadata seed to be run manually for a new project.
 - A local Hardhat chain and all of its deployed contract state reset whenever that local chain is restarted. Run the localhost seed again and use the refreshed deployment manifest.
 - The demo uses unlocked local Hardhat accounts only. It must not be used with real funds.
-- Stage 7 route-level code splitting now emits separate Trust Graph, Security Lab, Explorer, and Analytics chunks. Any remaining production-build warning is recorded with the current verification results.
+- Stage 8 route-level and vendor splitting removes the prior oversized initial-chunk build advisory. Bundle sizes remain release metrics rather than permanent guarantees.
 
 ## Git Checkpoint
 
-The known-good checkpoint immediately before Stage 5 is:
+Stage 8 started from the clean Stage 7 checkpoint:
 
 ```text
-commit: f35cef4
-full commit: f35cef496e8541213498d209f9a6329ee6dc4d6d
-message: Fix collapsed sidebar logo clipping
+full commit: fe05fbbfd5788cc09491429034a3e14efead162a
+message: AgentID Stage 7 trust security explorer analytics
 ```
 
-The Stage 5 completion commit is the next checkpoint and uses message `AgentID Stage 5 core identity portal`.
+The Stage 8 completion commit uses message `AgentID Stage 8 final QA and deployment readiness`.
 
 ## Stage 3 Status
 
@@ -595,11 +594,45 @@ Final verification passed **31 / 31 blockchain tests**, **115 / 115 backend test
 
 See `docs/STAGE7_PLATFORM.md` for setup, route, data-source, guardrail, and verification details. Focused guides are in `docs/TRUST_GRAPH.md`, `docs/SECURITY_LAB.md`, `docs/EXPLORER.md`, and `docs/ANALYTICS.md`.
 
+## Stage 8 Status
+
+Stage 8 is complete. It is a QA, resilience, polish, performance, and deployment-readiness stage; it does not deploy the product or add a new large module.
+
+Implemented and verified changes include:
+
+- all console shell and product pages use route-level lazy loading, with separate React, ethers, and motion vendor chunks;
+- the previous 829.33 kB (268.34 kB gzip) initial JavaScript chunk is replaced by a 27.53 kB (8.76 kB gzip) application entry plus 303.48 kB React, 250.57 kB ethers, and 135.53 kB motion vendor chunks;
+- the Vite build no longer emits the prior 500 kB chunk-size advisory;
+- a real Command Center `DEMO READY` check uses health data for backend, chain 31337, AgentRegistry reachability, configured persistence, and guarded local demo signing;
+- backend-connected/blockchain-unavailable is shown as `SYSTEM DEGRADED`, not incorrectly collapsed into a generic offline state;
+- completed delivery with later audit or interaction persistence failure remains a verified delivery and is visibly labeled `PERSISTENCE DEGRADED`; replay-store failures remain fail-closed with `SERVICE_UNAVAILABLE`;
+- the Guided Demo follows Command Center, Registry, Agent Passport, Communication, Security Lab, Trust Graph, Explorer, and Analytics, with Previous, Next, and Exit controls and no automatic operations;
+- Security Lab explains the real `UNKNOWN_WALLET` result for tampered signed fields without mislabeling it as a decoding failure;
+- Analytics defines success rate as verified audit attempts divided by total audit attempts and remains safe at zero attempts;
+- startup validation requires a registry address or deployment manifest, accepts an explicit network label, and rejects demo signing outside development before server startup;
+- frontend public configuration remains limited to `VITE_API_BASE_URL`; backend RPC, chain, contract, origin, persistence, and secret configuration remain server-side;
+- AgentID metadata, favicon, theme color, and social metadata are present without development URLs;
+- Passport deep links show the correct page context title;
+- Trust Graph filter controls reflow at 1024 CSS pixels without page overflow;
+- `docs/DEPLOYMENT_READINESS.md` documents current architecture, production and security requirements, SPA fallback, and an unexecuted Stage 9 checklist.
+
+The final local golden path used fresh Hardhat chain `31337`, AgentRegistry `0x5FbDB2315678afecb367f032d93F642f64180aa3`, and Supabase persistence. It confirmed:
+
+- three seeded Active identities and a working TravelAI passport;
+- valid request `LAB-2c2b43f0-d67f-4c29-b52e-3b18fe52121a` verified and executed by HotelAI;
+- replay request `LAB-31f9825f-8dd7-435a-b859-2e5e75221275` first verified, then blocked with `NONCE_REUSED` and no receiver execution;
+- revoked request `LAB-b63585e4-bdbd-47de-a24e-f00dfb1286b6` blocked with `AGENT_REVOKED` and no receiver execution;
+- revoke transaction `0xeaa4ff6ed036844d7c1c292573e902d818ab8e4f7057f1a8d191e7843305612b` at block 5 and reactivate transaction `0xfc72f4543b78f2f8ff11e251292992cd3495ab69301b2d5db6b4a38c0b6759f8` at block 6;
+- post-reactivation request `LAB-79488915-4674-43a7-87e2-ac74d8a48f69` verified and executed;
+- Trust Graph returned 3 real nodes and 3 persisted relationship edges, Explorer returned real blocks/events/receipts, and Analytics returned real registry/audit/interaction/lifecycle metrics;
+- direct browser visits to 11 important routes at 1920, 1440, 1366, 1024, 768, and 390 CSS pixels passed 66/66 checks without horizontal overflow or error screens.
+
+Final regression passed **31 / 31 blockchain tests**, **118 / 118 backend tests**, and **74 / 74 frontend tests**, plus all three TypeScript checks, Solidity compilation, and the frontend production build.
+
 ## Next Stage
 
-Stage 8 - QA, edge cases, and polish.
+Stage 9 — reviewed public testnet and hosting deployment. It has not started.
 
 ## Future Stages
 
-- Stage 8 — QA, edge cases, and polish.
-- Stage 9 — final demo and documentation.
+- Stage 9 — choose and review public infrastructure, then execute the checklist in `docs/DEPLOYMENT_READINESS.md` only with explicit approval.

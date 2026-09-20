@@ -14,6 +14,7 @@ export const onlineHealth: HealthResponse = {
   },
   persistenceMode: "SUPABASE",
   supabaseConnected: true,
+  demoSigningEnabled: true,
 };
 
 export function mockHealthResponse(data = onlineHealth) {

@@ -27,7 +27,8 @@ export class ApiClient {
   }
 
   health(signal?: AbortSignal) {
-    return this.request<HealthResponse>("/api/health", { signal });
+    // Degraded health uses HTTP 503 but still carries useful, non-secret diagnostics.
+    return this.request<HealthResponse>("/api/health", { signal }, true);
   }
 
   registry(signal?: AbortSignal) { return this.request<{ agents: EnrichedAgent[]; metadataAvailable: boolean; warning?: string }>("/api/registry", { signal }); }

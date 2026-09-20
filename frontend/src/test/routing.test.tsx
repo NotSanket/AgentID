@@ -9,7 +9,7 @@ describe("application routing", () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("offline"));
     const router = createMemoryRouter(routes, { initialEntries: ["/app"] });
     render(<RouterProvider router={router} />);
-    expect(screen.getByRole("heading", { name: "Command Center", level: 2 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Command Center", level: 2 })).toBeInTheDocument();
     expect(await screen.findByText("SYSTEM OFFLINE")).toBeInTheDocument();
   });
 

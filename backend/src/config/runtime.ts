@@ -9,6 +9,7 @@ const environmentSchema = z.object({
   RPC_URL: z.url().default("http://127.0.0.1:8545"),
   AGENT_REGISTRY_ADDRESS: z.string().optional(),
   CHAIN_ID: z.coerce.number().int().positive().optional(),
+  NETWORK_NAME: z.string().trim().min(1).optional(),
   REQUEST_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(300),
   CLOCK_SKEW_SECONDS: z.coerce.number().int().nonnegative().default(30),
   FRONTEND_ORIGINS: z.string()
@@ -67,12 +68,21 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
     manifest = manifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
   }
 
+  const registryAddress = env.AGENT_REGISTRY_ADDRESS || manifest?.address || "";
+  const expectedChainId = env.CHAIN_ID ?? manifest?.chainId ?? 31337;
+  if (env.NODE_ENV !== "development" && env.ENABLE_DEMO_SIGNING) {
+    throw new Error("ENABLE_DEMO_SIGNING must be false outside development.");
+  }
+  if (!registryAddress) {
+    throw new Error("AGENT_REGISTRY_ADDRESS or a valid deployment manifest is required.");
+  }
+
   return {
     port: env.PORT,
     rpcUrl: env.RPC_URL,
-    registryAddress: env.AGENT_REGISTRY_ADDRESS || manifest?.address || "",
-    expectedChainId: env.CHAIN_ID ?? manifest?.chainId ?? 31337,
-    networkName: manifest?.network ?? "localhost",
+    registryAddress,
+    expectedChainId,
+    networkName: env.NETWORK_NAME ?? manifest?.network ?? (expectedChainId === 31337 ? "localhost" : "configured-network"),
     manifestPath,
     artifactPath: manifest?.abiArtifact
       ? path.resolve(path.dirname(manifestPath), manifest.abiArtifact)

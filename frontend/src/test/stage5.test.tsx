@@ -51,33 +51,33 @@ describe("Stage 5 registration", () => {
     expect(generateAgentId("Security Research AI", 2)).toBe("AGT-SECURITY-RESEARCH-002");
   });
 
-  it("validates profile fields before advancing", () => {
+  it("validates profile fields before advancing", async () => {
     stage5Fetch(); renderRoute("/app/register");
-    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Continue" })).toBeDisabled();
   });
 
   it("checks AgentID availability and reports collisions", async () => {
     stage5Fetch({ unavailable: true }); const user = userEvent.setup(); renderRoute("/app/register");
-    await user.type(screen.getByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.type(await screen.findByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByText("IN USE")).toBeInTheDocument();
   });
 
   it("shows browser-wallet unavailable and local demo ownership choices", async () => {
     stage5Fetch(); const user = userEvent.setup(); renderRoute("/app/register");
-    await user.type(screen.getByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.click(screen.getByRole("button", { name: "Continue" })); await screen.findByText("AVAILABLE"); await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.type(await screen.findByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.click(screen.getByRole("button", { name: "Continue" })); await screen.findByText("AVAILABLE"); await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByText("Browser wallet unavailable")).toBeInTheDocument(); expect(screen.getByText("Local Demo Wallet")).toBeInTheDocument();
   });
 
   it("issues an identity through an available local demo wallet", async () => {
     stage5Fetch({ walletAvailable: true }); const user = userEvent.setup(); renderRoute("/app/register");
-    await user.type(screen.getByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.type(screen.getByLabelText("Capabilities"), "RESEARCH, SUMMARIZE"); await user.click(screen.getByRole("button", { name: "Continue" })); await screen.findByText("AVAILABLE"); await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.type(await screen.findByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.type(screen.getByLabelText("Capabilities"), "RESEARCH, SUMMARIZE"); await user.click(screen.getByRole("button", { name: "Continue" })); await screen.findByText("AVAILABLE"); await user.click(screen.getByRole("button", { name: "Continue" }));
     const walletButton = (await screen.findByText("Demo Wallet 4")).closest("button")!; await user.click(walletButton); await user.click(screen.getByRole("button", { name: "Continue" })); await user.click(screen.getByRole("button", { name: "Issue Identity" }));
     expect(await screen.findByText("IDENTITY ISSUED")).toBeInTheDocument(); expect(screen.getByText("REGISTER CONFIRMED")).toBeInTheDocument();
   });
 
   it("shows a human-readable registration failure", async () => {
     stage5Fetch({ walletAvailable: true, registrationFails: true }); const user = userEvent.setup(); renderRoute("/app/register");
-    await user.type(screen.getByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.click(screen.getByRole("button", { name: "Continue" })); await screen.findByText("AVAILABLE"); await user.click(screen.getByRole("button", { name: "Continue" })); await user.click((await screen.findByText("Demo Wallet 4")).closest("button")!); await user.click(screen.getByRole("button", { name: "Continue" })); await user.click(screen.getByRole("button", { name: "Issue Identity" }));
+    await user.type(await screen.findByLabelText("Agent Name"), "ResearchAI"); await user.type(screen.getByLabelText("Organization"), "AgentID Labs"); await user.click(screen.getByRole("button", { name: "Continue" })); await screen.findByText("AVAILABLE"); await user.click(screen.getByRole("button", { name: "Continue" })); await user.click((await screen.findByText("Demo Wallet 4")).closest("button")!); await user.click(screen.getByRole("button", { name: "Continue" })); await user.click(screen.getByRole("button", { name: "Issue Identity" }));
     expect(await screen.findAllByText("Registration failed.")).not.toHaveLength(0);
   });
 });
@@ -120,19 +120,19 @@ describe("Stage 5 registry and Passport", () => {
 
 describe("Stage 5 verification and dashboard", () => {
   it("renders ACTIVE registry verification", async () => {
-    stage5Fetch(); const user = userEvent.setup(); renderRoute("/app/verification"); await user.type(screen.getByLabelText("AgentID or wallet address"), activeAgent.agentId); await user.click(screen.getByRole("button", { name: "Verify Identity" })); expect(await screen.findByText("IDENTITY VERIFIED")).toBeInTheDocument();
+    stage5Fetch(); const user = userEvent.setup(); renderRoute("/app/verification"); await user.type(await screen.findByLabelText("AgentID or wallet address"), activeAgent.agentId); await user.click(screen.getByRole("button", { name: "Verify Identity" })); expect(await screen.findByText("IDENTITY VERIFIED")).toBeInTheDocument();
   });
 
   it("renders REVOKED without calling it verified", async () => {
-    stage5Fetch({ agent: { ...activeAgent, status: "Revoked", blockchainStatus: "Revoked" } }); const user = userEvent.setup(); renderRoute("/app/verification"); await user.type(screen.getByLabelText("AgentID or wallet address"), activeAgent.agentId); await user.click(screen.getByRole("button", { name: "Verify Identity" })); expect(await screen.findByText("IDENTITY REVOKED")).toBeInTheDocument();
+    stage5Fetch({ agent: { ...activeAgent, status: "Revoked", blockchainStatus: "Revoked" } }); const user = userEvent.setup(); renderRoute("/app/verification"); await user.type(await screen.findByLabelText("AgentID or wallet address"), activeAgent.agentId); await user.click(screen.getByRole("button", { name: "Verify Identity" })); expect(await screen.findByText("IDENTITY REVOKED")).toBeInTheDocument();
   });
 
   it("renders UNKNOWN identity", async () => {
-    stage5Fetch({ unavailable: true }); const user = userEvent.setup(); renderRoute("/app/verification"); await user.type(screen.getByLabelText("AgentID or wallet address"), owner); await user.click(screen.getByRole("button", { name: "Verify Identity" })); expect(await screen.findByText("IDENTITY NOT FOUND")).toBeInTheDocument();
+    stage5Fetch({ unavailable: true }); const user = userEvent.setup(); renderRoute("/app/verification"); await user.type(await screen.findByLabelText("AgentID or wallet address"), owner); await user.click(screen.getByRole("button", { name: "Verify Identity" })); expect(await screen.findByText("IDENTITY NOT FOUND")).toBeInTheDocument();
   });
 
   it("renders actual signed-request result codes and checks", async () => {
-    stage5Fetch(); const user = userEvent.setup(); renderRoute("/app/verification"); await user.click(screen.getByRole("button", { name: /Advanced signed request/i })); fireEvent.change(screen.getByLabelText("Structured request"), { target: { value: JSON.stringify({ requestId: "REQ-1" }) } }); await user.type(screen.getByLabelText("EIP-712 signature"), "0x1234"); await user.click(screen.getByRole("button", { name: "Run Authentication" })); expect(await screen.findByText("NONCE_REUSED")).toBeInTheDocument(); expect(screen.getByText("Nonce Unused")).toBeInTheDocument();
+    stage5Fetch(); const user = userEvent.setup(); renderRoute("/app/verification"); await user.click(await screen.findByRole("button", { name: /Advanced signed request/i })); fireEvent.change(screen.getByLabelText("Structured request"), { target: { value: JSON.stringify({ requestId: "REQ-1" }) } }); await user.type(screen.getByLabelText("EIP-712 signature"), "0x1234"); await user.click(screen.getByRole("button", { name: "Run Authentication" })); expect(await screen.findByText("NONCE_REUSED")).toBeInTheDocument(); expect(screen.getByText("Nonce Unused")).toBeInTheDocument();
   });
 
   it("renders Command Center metrics from APIs", async () => {
