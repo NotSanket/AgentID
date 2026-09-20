@@ -15,8 +15,8 @@ import { SecurityScenarioService } from "./services/security-scenario-service.js
 
 export async function bootstrap() {
   const config = loadRuntimeConfig();
-  const blockchain = new BlockchainService(config);
   const persistence = await createPersistence(config);
+  const blockchain = new BlockchainService(config, persistence.chainEventStore);
   const authentication = new AuthenticationService(blockchain, persistence.replayStore, persistence.auditStore, {
     chainId: config.expectedChainId,
     verifyingContract: config.registryAddress,

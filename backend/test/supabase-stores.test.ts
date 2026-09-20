@@ -4,7 +4,7 @@ import type { RuntimeConfig } from "../src/config/runtime.js";
 import type { Database } from "../src/persistence/database.types.js";
 import { createPersistence } from "../src/persistence/factory.js";
 import { PersistenceError } from "../src/persistence/errors.js";
-import { SupabaseAuditStore, SupabaseReplayStore } from "../src/persistence/supabase-stores.js";
+import { SupabaseAuditStore, SupabaseChainEventIndexStore, SupabaseReplayStore } from "../src/persistence/supabase-stores.js";
 
 function clientWithInsert(error: { code?: string } | null) {
   const insert = vi.fn().mockResolvedValue({ error });
@@ -98,5 +98,62 @@ describe("Stage 3 Supabase repositories with mocked clients", () => {
     const error = new PersistenceError("test", "CODE");
     expect(error.message).toBe("Persistence operation failed: test.");
     expect(error.message).not.toContain("server-only-test-key");
+  });
+
+  it("upserts decoded chain events before advancing the durable checkpoint", async () => {
+    const operations: string[] = [];
+    const client = {
+      from: vi.fn((table: string) => ({
+        upsert: vi.fn(async () => { operations.push(table); return { error: null }; }),
+      })),
+    } as unknown as SupabaseClient<Database>;
+    const store = new SupabaseChainEventIndexStore(client);
+    await store.persistChunk(
+      { chainId: 11155111, contractAddress: "0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a" },
+      [{
+        type: "Registered",
+        agentId: "AGT-A",
+        owner: "0x77eEeCC3C47dAB02c8ba237AE52Be203CE454f86",
+        timestamp: "2000000000",
+        blockNumber: 11743199,
+        logIndex: 0,
+        transactionHash: `0x${"1".repeat(64)}`,
+      }],
+      11743208,
+    );
+    expect(operations).toEqual(["chain_event_index", "chain_indexer_state"]);
+  });
+
+  it("advances a zero-event checkpoint without writing a fabricated event", async () => {
+    const operations: string[] = [];
+    const client = {
+      from: vi.fn((table: string) => ({
+        upsert: vi.fn(async () => { operations.push(table); return { error: null }; }),
+      })),
+    } as unknown as SupabaseClient<Database>;
+    const store = new SupabaseChainEventIndexStore(client);
+    await store.persistChunk(
+      { chainId: 11155111, contractAddress: "0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a" },
+      [],
+      11743208,
+    );
+    expect(operations).toEqual(["chain_indexer_state"]);
+  });
+
+  it("keeps chain-index storage failures secret-safe", async () => {
+    const sensitive = "supabase-secret-must-not-escape";
+    const client = {
+      from: vi.fn(() => ({
+        upsert: vi.fn(async () => ({ error: { code: "08006", message: sensitive } })),
+      })),
+    } as unknown as SupabaseClient<Database>;
+    const store = new SupabaseChainEventIndexStore(client);
+    const operation = store.persistChunk(
+      { chainId: 11155111, contractAddress: "0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a" },
+      [],
+      11743208,
+    );
+    await expect(operation).rejects.toMatchObject({ name: "PersistenceError", errorCode: "08006" });
+    await expect(operation).rejects.not.toHaveProperty("message", expect.stringContaining(sensitive));
   });
 });

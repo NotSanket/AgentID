@@ -1,4 +1,4 @@
-import type { AgentRecord, JsonValue } from "../domain/types.js";
+import type { AgentRecord, IdentityLifecycleEvent, JsonValue } from "../domain/types.js";
 
 export type PersistenceMode = "IN_MEMORY" | "SUPABASE";
 
@@ -86,4 +86,23 @@ export interface PersistenceStatus {
   mode: PersistenceMode;
   supabaseConnected: boolean;
   warning?: string;
+}
+
+export interface ChainEventNamespace {
+  chainId: number;
+  contractAddress: string;
+}
+
+export interface ChainEventIndexSnapshot {
+  events: IdentityLifecycleEvent[];
+  lastScannedBlock: number | null;
+}
+
+export interface ChainEventIndexStore {
+  load(namespace: ChainEventNamespace): Promise<ChainEventIndexSnapshot>;
+  persistChunk(
+    namespace: ChainEventNamespace,
+    events: readonly IdentityLifecycleEvent[],
+    lastScannedBlock: number,
+  ): Promise<void>;
 }

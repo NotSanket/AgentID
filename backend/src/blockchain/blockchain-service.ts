@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { Contract, JsonRpcProvider, getAddress, isAddress, type InterfaceAbi } from "ethers";
 import type { RuntimeConfig } from "../config/runtime.js";
 import type { AgentRecord, IdentityContractConfig, IdentityLifecycleEvent, RegistryReader } from "../domain/types.js";
+import type { ChainEventIndexStore } from "../persistence/types.js";
 import { AgentRegistryEventReader } from "./agent-registry-event-reader.js";
 import type { EventScannerMetrics } from "./event-scanner.js";
 
@@ -26,7 +27,7 @@ export class BlockchainService implements RegistryReader {
   private readonly eventReader?: AgentRegistryEventReader;
   private readonly initializationError?: string;
 
-  constructor(private readonly config: RuntimeConfig) {
+  constructor(private readonly config: RuntimeConfig, eventIndexStore?: ChainEventIndexStore) {
     this.provider = new JsonRpcProvider(config.rpcUrl);
     this.address = config.registryAddress;
     this.abi = [];
@@ -41,6 +42,8 @@ export class BlockchainService implements RegistryReader {
         provider: this.provider,
         contractAddress: this.address,
         contractInterface: this.contract.interface,
+        chainId: config.expectedChainId,
+        eventIndexStore,
         deploymentBlock: config.deploymentBlock,
         chunkSize: config.eventScanBlockChunk,
         requestDelayMs: config.eventScanRequestDelayMs,

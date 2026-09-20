@@ -117,6 +117,48 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["replay_nonces"]["Insert"]>;
         Relationships: [];
       };
+      chain_event_index: {
+        Row: {
+          chain_id: number;
+          contract_address: string;
+          block_number: number;
+          transaction_hash: string;
+          log_index: number;
+          event_name: string;
+          agent_id: string;
+          decoded_data: DatabaseJson;
+          created_at: string;
+        };
+        Insert: {
+          chain_id: number;
+          contract_address: string;
+          block_number: number;
+          transaction_hash: string;
+          log_index: number;
+          event_name: string;
+          agent_id: string;
+          decoded_data: DatabaseJson;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["chain_event_index"]["Insert"]>;
+        Relationships: [];
+      };
+      chain_indexer_state: {
+        Row: {
+          chain_id: number;
+          contract_address: string;
+          last_scanned_block: number;
+          updated_at: string;
+        };
+        Insert: {
+          chain_id: number;
+          contract_address: string;
+          last_scanned_block: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["chain_indexer_state"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

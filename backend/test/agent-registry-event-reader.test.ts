@@ -1,6 +1,7 @@
 import { Interface, Wallet, type Log } from "ethers";
 import { describe, expect, it, vi } from "vitest";
 import { AgentRegistryEventReader } from "../src/blockchain/agent-registry-event-reader.js";
+import { InMemoryChainEventIndexStore } from "../src/stores/chain-event-index-store.js";
 
 const registry = Wallet.createRandom().address;
 const owner = Wallet.createRandom().address;
@@ -70,5 +71,33 @@ describe("AgentRegistry raw lifecycle event reader", () => {
       requestDelayMs: 0,
     });
     expect((await reader.scan()).map((event) => event.logIndex)).toEqual([1]);
+  });
+
+  it("restores a zero-event checkpoint across reader instances and scans only new blocks", async () => {
+    const eventIndexStore = new InMemoryChainEventIndexStore();
+    const firstGetLogs = vi.fn(async () => [] as Log[]);
+    await new AgentRegistryEventReader({
+      provider: { getBlockNumber: async () => 100, getLogs: firstGetLogs },
+      contractAddress: registry,
+      contractInterface,
+      chainId: 11155111,
+      eventIndexStore,
+      deploymentBlock: 100,
+      requestDelayMs: 0,
+    }).scan();
+    expect(firstGetLogs).toHaveBeenCalledWith({ address: registry, fromBlock: 100, toBlock: 100 });
+
+    const restartedGetLogs = vi.fn(async () => [lifecycleLog("AgentRegistered", 101, 0)]);
+    const events = await new AgentRegistryEventReader({
+      provider: { getBlockNumber: async () => 101, getLogs: restartedGetLogs },
+      contractAddress: registry,
+      contractInterface,
+      chainId: 11155111,
+      eventIndexStore,
+      deploymentBlock: 100,
+      requestDelayMs: 0,
+    }).scan();
+    expect(restartedGetLogs).toHaveBeenCalledWith({ address: registry, fromBlock: 101, toBlock: 101 });
+    expect(events.map((event) => event.agentId)).toEqual(["AGT-TRAVEL-001"]);
   });
 });

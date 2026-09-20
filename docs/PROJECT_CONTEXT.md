@@ -21,7 +21,7 @@ The current implementation has these layers:
 - an authentication service that recovers the signer and verifies it against the registry;
 - timestamp freshness and nonce replay protection;
 - deterministic offline TravelAI, HotelAI, and PaymentAI demo handlers;
-- repository abstractions for audit events, replay nonces, verified interactions, and agent metadata;
+- repository abstractions for audit events, replay nonces, verified interactions, agent metadata, and the chain event index;
 - official Supabase JavaScript client integration backed by PostgreSQL;
 - a complete in-memory persistence fallback;
 - analytics calculated from stored authentication and interaction records;
@@ -31,7 +31,7 @@ The current implementation has these layers:
 - strictly guarded local-Hardhat demo writes for teaching and development;
 - a real Registry, Digital Agent Passport, identity issuance wizard, verification workspace, and live Command Center.
 
-Stages 1–8 are implemented. This includes authenticated communication, the controlled Security Lab, Trust Graph, local-chain Explorer, stored-data Analytics, final resilience and responsive QA, and deployment-readiness configuration. Supabase support is implemented, and Stage 3 persistence plus Stage 5–8 workflows have been verified against the configured real project. The application has not been publicly deployed.
+Stages 1–8 are implemented. Stage 9 has deployed the existing AgentRegistry to Ethereum Sepolia and is hardening the application before public hosting. Render and Vercel hosting are not deployed. Supabase support is implemented, and Stage 3 persistence plus Stage 5–8 workflows have been verified against the configured real project.
 
 ## Stage 1 — Blockchain Foundation
 
@@ -629,16 +629,30 @@ The final local golden path used fresh Hardhat chain `31337`, AgentRegistry `0x5
 
 Final regression passed **31 / 31 blockchain tests**, **118 / 118 backend tests**, and **74 / 74 frontend tests**, plus all three TypeScript checks, Solidity compilation, and the frontend production build.
 
-## Next Stage
+## Stage 9 Status
 
-Stage 9 — reviewed public testnet and hosting deployment. It has not started.
+Stage 9 is in progress. The existing AgentRegistry is deployed to Ethereum Sepolia at `0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a` on chain `11155111`, with deployment block `11743199`. Public backend and frontend hosting have not been deployed, and the public registry remains intentionally unseeded.
 
 ### Stage 9 public event scanning note
 
 Production JSON-RPC providers may limit the block range accepted by `eth_getLogs`. AgentID reads AgentRegistry history from the contract deployment block recorded in the active deployment manifest and scans forward in bounded, inclusive chunks (10 blocks by default) instead of querying from block zero to latest in one request. All Registry, Passport lifecycle, Trust Graph, Explorer, Analytics, and Command Center paths that depend on AgentRegistry events use the shared scanner. A healthy public registry with no `AgentRegistered` events is a valid empty registry and returns an empty list rather than an availability error.
 
-The shared public reader performs one address-only `eth_getLogs` request per chunk and decodes Registered, Updated, Revoked, and Reactivated events locally. Requests are sequential with a configurable 175 ms default delay. Rate limits and temporary provider failures receive at most three total attempts with bounded backoff; invalid parameters, authentication failures, and other deterministic errors are not retried. Successful decoded history is cached in memory, so later reads scan only blocks after the last successful block. Failed incremental scans do not modify the previous complete cache.
+The shared public reader performs one address-only `eth_getLogs` request per chunk and decodes Registered, Updated, Revoked, and Reactivated events locally. Requests are sequential with a configurable 175 ms default delay. Rate limits and temporary provider failures receive at most three total attempts with bounded backoff; invalid parameters, authentication failures, and other deterministic errors are not retried.
 
-## Future Stages
+The event-history hierarchy is:
 
-- Stage 9 — choose and review public infrastructure, then execute the checklist in `docs/DEPLOYMENT_READINESS.md` only with explicit approval.
+1. the process-memory cache for repeated reads;
+2. the Supabase event index and per-chain/per-contract checkpoint for cold starts;
+3. incremental blockchain RPC reads for blocks after the durable checkpoint.
+
+Ethereum remains authoritative. Supabase is only a persistent index of decoded, verified on-chain logs, and memory is only a performance cache. Registry, Passport lifecycle, Trust Graph, Explorer, Analytics, and Command Center all continue to use the same shared reader.
+
+For every completed block chunk, decoded lifecycle events are idempotently upserted before `last_scanned_block` advances. The event key is `(chain_id, contract_address, transaction_hash, log_index)`. If the cursor update fails after event insertion, replaying the chunk is safe. Empty chunks also advance the checkpoint, so the current empty public registry does not trigger a full deployment-to-latest rescan after every backend restart. A cold start loads the namespaced checkpoint and indexed history, then asks Sepolia only for `last_scanned_block + 1` through the latest block. A failed storage operation never advances the in-memory cursor or discards an earlier valid memory snapshot.
+
+The migration `supabase/migrations/202609200001_chain_event_index.sql` creates `chain_event_index` and `chain_indexer_state`, applies RLS and server-only permissions, and prevents checkpoint regression. It must be applied manually to the configured Supabase project before public backend deployment. Until it is applied, the startup health check safely selects in-memory persistence and reports its existing warning; no migration is considered live merely because the SQL file is committed.
+
+Read-only Sepolia verification on 2026-09-20 scanned deployment block `11743199` through block `11744788` in 159 bounded log requests and found the expected zero lifecycle events. The completed empty scan persisted checkpoint `11744788` in a shared repository test instance. A newly constructed reader then started at block `11744789` and made one incremental request instead of rescanning deployment history. The live Supabase tables were not created or mutated during this check; durable database verification remains pending the manual migration.
+
+## Next Stage 9 Checkpoint
+
+Apply the committed chain-event-index migration manually in Supabase, verify the public zero-identity index and restart checkpoint, and only then continue the separately reviewed hosting checklist. Public seeding and demo signing remain disabled.

@@ -17,6 +17,11 @@ export interface EventScannerMetrics {
   totalLogRequests: number;
 }
 
+export interface EventScannerState<TEvent extends ScannableEvent> {
+  events: readonly TEvent[];
+  lastScannedBlock: number | null;
+}
+
 export interface CachedEventScannerOptions<TEvent extends ScannableEvent> {
   deploymentBlock: number;
   chunkSize?: number;
@@ -25,6 +30,8 @@ export interface CachedEventScannerOptions<TEvent extends ScannableEvent> {
   retryDelaysMs?: readonly number[];
   getLatestBlock: () => Promise<number>;
   queryRange: (fromBlock: number, toBlock: number) => Promise<readonly TEvent[]>;
+  loadInitialState?: () => Promise<EventScannerState<TEvent>>;
+  persistChunk?: (events: readonly TEvent[], lastScannedBlock: number) => Promise<void>;
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
@@ -52,6 +59,7 @@ export class CachedEventScanner<TEvent extends ScannableEvent> {
   private lastScannedBlock: number | null = null;
   private totalLogRequests = 0;
   private inFlight?: Promise<TEvent[]>;
+  private hydrated = false;
 
   constructor(private readonly options: CachedEventScannerOptions<TEvent>) {
     this.chunkSize = options.chunkSize ?? DEFAULT_EVENT_SCAN_BLOCK_CHUNK;
@@ -93,6 +101,7 @@ export class CachedEventScanner<TEvent extends ScannableEvent> {
   }
 
   private async performScan(): Promise<TEvent[]> {
+    await this.hydrate();
     const latestBlock = await this.latestBlockWithRetries();
 
     const startBlock = this.lastScannedBlock === null
@@ -106,6 +115,7 @@ export class CachedEventScanner<TEvent extends ScannableEvent> {
       const end = Math.min(start + this.chunkSize - 1, latestBlock);
       if (chunkIndex > 0 && this.requestDelayMs > 0) await this.sleep(this.requestDelayMs);
       const chunk = await this.queryWithRetries(start, end);
+      await this.options.persistChunk?.(chunk, end);
       for (const event of chunk) {
         const key = `${event.blockNumber}:${event.transactionHash.toLowerCase()}:${event.index}`;
         if (!stagedEvents.has(key)) stagedEvents.set(key, event);
@@ -116,6 +126,27 @@ export class CachedEventScanner<TEvent extends ScannableEvent> {
     this.cachedEvents = stagedEvents;
     this.lastScannedBlock = latestBlock;
     return this.sortedEvents(this.cachedEvents);
+  }
+
+  private async hydrate(): Promise<void> {
+    if (this.hydrated) return;
+    if (!this.options.loadInitialState) {
+      this.hydrated = true;
+      return;
+    }
+    const state = await this.options.loadInitialState();
+    if (state.lastScannedBlock !== null
+      && (!Number.isSafeInteger(state.lastScannedBlock) || state.lastScannedBlock < 0)) {
+      throw new RangeError("The persisted event scan checkpoint must be a non-negative safe integer.");
+    }
+    const hydratedEvents = new Map<string, TEvent>();
+    for (const event of state.events) {
+      const key = `${event.blockNumber}:${event.transactionHash.toLowerCase()}:${event.index}`;
+      hydratedEvents.set(key, event);
+    }
+    this.cachedEvents = hydratedEvents;
+    this.lastScannedBlock = state.lastScannedBlock;
+    this.hydrated = true;
   }
 
   private async queryWithRetries(fromBlock: number, toBlock: number): Promise<readonly TEvent[]> {

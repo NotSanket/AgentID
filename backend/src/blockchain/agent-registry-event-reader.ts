@@ -1,5 +1,6 @@
 import { getAddress, type Interface, type Log } from "ethers";
 import type { IdentityLifecycleEvent, IdentityLifecycleEventType } from "../domain/types.js";
+import type { ChainEventIndexStore, ChainEventNamespace } from "../persistence/types.js";
 import {
   CachedEventScanner,
   type CachedEventScannerOptions,
@@ -20,6 +21,8 @@ export interface AgentRegistryEventReaderOptions {
   provider: RegistryLogProvider;
   contractAddress: string;
   contractInterface: Interface;
+  chainId?: number;
+  eventIndexStore?: ChainEventIndexStore;
   deploymentBlock: number;
   chunkSize?: number;
   requestDelayMs?: number;
@@ -39,6 +42,9 @@ export class AgentRegistryEventReader {
   private readonly scanner: CachedEventScanner<DecodedAgentRegistryEvent>;
 
   constructor(private readonly options: AgentRegistryEventReaderOptions) {
+    const namespace: ChainEventNamespace | undefined = options.eventIndexStore && options.chainId !== undefined
+      ? { chainId: options.chainId, contractAddress: getAddress(options.contractAddress) }
+      : undefined;
     this.scanner = new CachedEventScanner({
       deploymentBlock: options.deploymentBlock,
       chunkSize: options.chunkSize,
@@ -48,6 +54,18 @@ export class AgentRegistryEventReader {
       sleep: options.sleep,
       getLatestBlock: () => options.provider.getBlockNumber(),
       queryRange: (fromBlock, toBlock) => this.readRange(fromBlock, toBlock),
+      loadInitialState: namespace
+        ? async () => {
+          const state = await options.eventIndexStore!.load(namespace);
+          return {
+            lastScannedBlock: state.lastScannedBlock,
+            events: state.events.map((event) => ({ ...event, index: event.logIndex })),
+          };
+        }
+        : undefined,
+      persistChunk: namespace
+        ? (events, lastScannedBlock) => options.eventIndexStore!.persistChunk(namespace, events, lastScannedBlock)
+        : undefined,
     });
   }
 

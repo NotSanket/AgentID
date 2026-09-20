@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { JsonValue } from "../domain/types.js";
+import type { IdentityLifecycleEvent, IdentityLifecycleEventType, JsonValue } from "../domain/types.js";
 import type {
   AuditCountQuery,
   AuditEvent,
@@ -17,6 +17,9 @@ import type {
   AgentMetadata,
   AgentMetadataInput,
   AgentMetadataStore,
+  ChainEventIndexSnapshot,
+  ChainEventIndexStore,
+  ChainEventNamespace,
   InteractionInput,
   InteractionListQuery,
   InteractionRecord,
@@ -29,6 +32,104 @@ type Client = SupabaseClient<Database>;
 type AuditRow = Database["public"]["Tables"]["audit_events"]["Row"];
 type InteractionRow = Database["public"]["Tables"]["interactions"]["Row"];
 type MetadataRow = Database["public"]["Tables"]["agent_metadata"]["Row"];
+type ChainEventRow = Database["public"]["Tables"]["chain_event_index"]["Row"];
+
+const eventNameByType: Readonly<Record<IdentityLifecycleEventType, string>> = {
+  Registered: "AgentRegistered",
+  Updated: "AgentUpdated",
+  Revoked: "AgentRevoked",
+  Reactivated: "AgentReactivated",
+};
+
+const typeByEventName: Readonly<Record<string, IdentityLifecycleEventType>> = {
+  AgentRegistered: "Registered",
+  AgentUpdated: "Updated",
+  AgentRevoked: "Revoked",
+  AgentReactivated: "Reactivated",
+};
+
+function normalizedContract(namespace: ChainEventNamespace): string {
+  return namespace.contractAddress.toLowerCase();
+}
+
+export class SupabaseChainEventIndexStore implements ChainEventIndexStore {
+  constructor(private readonly client: Client) {}
+
+  async load(namespace: ChainEventNamespace): Promise<ChainEventIndexSnapshot> {
+    const contractAddress = normalizedContract(namespace);
+    const stateResponse = await this.client
+      .from("chain_indexer_state")
+      .select("last_scanned_block")
+      .eq("chain_id", namespace.chainId)
+      .eq("contract_address", contractAddress)
+      .maybeSingle();
+    if (stateResponse.error) throw persistenceError("load chain indexer checkpoint", stateResponse.error);
+
+    const eventsResponse = await this.client
+      .from("chain_event_index")
+      .select("*")
+      .eq("chain_id", namespace.chainId)
+      .eq("contract_address", contractAddress)
+      .order("block_number")
+      .order("log_index");
+    if (eventsResponse.error) throw persistenceError("load chain event index", eventsResponse.error);
+
+    return {
+      events: (eventsResponse.data ?? []).map((row) => this.map(row)),
+      lastScannedBlock: stateResponse.data ? Number(stateResponse.data.last_scanned_block) : null,
+    };
+  }
+
+  async persistChunk(
+    namespace: ChainEventNamespace,
+    events: readonly IdentityLifecycleEvent[],
+    lastScannedBlock: number,
+  ): Promise<void> {
+    const contractAddress = normalizedContract(namespace);
+    if (events.length > 0) {
+      const rows: Database["public"]["Tables"]["chain_event_index"]["Insert"][] = events.map((event) => ({
+        chain_id: namespace.chainId,
+        contract_address: contractAddress,
+        block_number: event.blockNumber,
+        transaction_hash: event.transactionHash.toLowerCase(),
+        log_index: event.logIndex,
+        event_name: eventNameByType[event.type],
+        agent_id: event.agentId,
+        decoded_data: { owner: event.owner, timestamp: event.timestamp },
+      }));
+      const { error } = await this.client.from("chain_event_index").upsert(rows, {
+        onConflict: "chain_id,contract_address,transaction_hash,log_index",
+      });
+      if (error) throw persistenceError("persist chain events", error);
+    }
+
+    const { error } = await this.client.from("chain_indexer_state").upsert({
+      chain_id: namespace.chainId,
+      contract_address: contractAddress,
+      last_scanned_block: lastScannedBlock,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "chain_id,contract_address" });
+    if (error) throw persistenceError("advance chain indexer checkpoint", error);
+  }
+
+  private map(row: ChainEventRow): IdentityLifecycleEvent {
+    const decoded = row.decoded_data;
+    const type = typeByEventName[row.event_name];
+    if (!type || !decoded || typeof decoded !== "object" || Array.isArray(decoded)
+      || typeof decoded.owner !== "string" || typeof decoded.timestamp !== "string") {
+      throw persistenceError("decode chain event index", { code: "INVALID_DATA" });
+    }
+    return {
+      type,
+      agentId: row.agent_id,
+      owner: decoded.owner,
+      timestamp: decoded.timestamp,
+      blockNumber: Number(row.block_number),
+      logIndex: row.log_index,
+      transactionHash: row.transaction_hash,
+    };
+  }
+}
 
 export class SupabaseAuditStore implements AuditStore {
   constructor(private readonly client: Client) {}
