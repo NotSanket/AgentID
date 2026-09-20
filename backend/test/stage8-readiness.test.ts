@@ -29,7 +29,23 @@ describe("Stage 8 production configuration readiness", () => {
       networkName: "public-testnet",
       frontendOrigins: ["https://agentid.example"],
       supabaseEnabled: true,
+      deploymentBlock: 0,
+      eventScanBlockChunk: 10,
     });
+  });
+
+  it("selects the Sepolia manifest and its deployment block without another production variable", () => {
+    const environment = publicEnvironment();
+    delete environment.DEPLOYMENT_MANIFEST_PATH;
+    environment.AGENT_REGISTRY_ADDRESS = "0xA8fC4db5eFD8F6a316fbAB81Fb4cb83A8826d42a";
+    const config = loadRuntimeConfig(environment);
+    expect(config.manifestPath.replaceAll("\\", "/")).toMatch(/blockchain\/deployments\/sepolia\.json$/);
+    expect(config.deploymentBlock).toBe(11743199);
+    expect(config.eventScanBlockChunk).toBe(10);
+  });
+
+  it("accepts an optional positive event scan chunk override", () => {
+    expect(loadRuntimeConfig({ ...publicEnvironment(), EVENT_SCAN_BLOCK_CHUNK: "25" }).eventScanBlockChunk).toBe(25);
   });
 
   it("rejects demo signing outside development before the server starts", () => {

@@ -12,6 +12,7 @@ const environmentSchema = z.object({
   NETWORK_NAME: z.string().trim().min(1).optional(),
   REQUEST_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(300),
   CLOCK_SKEW_SECONDS: z.coerce.number().int().nonnegative().default(30),
+  EVENT_SCAN_BLOCK_CHUNK: z.coerce.number().int().positive().default(10),
   FRONTEND_ORIGINS: z.string()
     .default("http://localhost:5173,http://127.0.0.1:5173")
     .transform((value) => value.split(",").map((origin) => origin.trim()).filter(Boolean))
@@ -40,6 +41,8 @@ export interface RuntimeConfig {
   networkName: string;
   manifestPath: string;
   artifactPath: string;
+  deploymentBlock: number;
+  eventScanBlockChunk: number;
   requestMaxAgeSeconds: number;
   clockSkewSeconds: number;
   frontendOrigins?: string[];
@@ -54,9 +57,12 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
   const env = environmentSchema.parse(environment);
   const here = path.dirname(fileURLToPath(import.meta.url));
   const workspaceRoot = path.resolve(here, "../../..");
+  const defaultManifestFile = env.CHAIN_ID === 11155111 || env.NETWORK_NAME?.toLowerCase() === "sepolia"
+    ? "sepolia.json"
+    : "localhost.json";
   const manifestPath = path.resolve(
     environment.DEPLOYMENT_MANIFEST_PATH ??
-      path.join(workspaceRoot, "blockchain/deployments/localhost.json"),
+      path.join(workspaceRoot, "blockchain/deployments", defaultManifestFile),
   );
   const defaultArtifactPath = path.join(
     workspaceRoot,
@@ -87,6 +93,8 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
     artifactPath: manifest?.abiArtifact
       ? path.resolve(path.dirname(manifestPath), manifest.abiArtifact)
       : defaultArtifactPath,
+    deploymentBlock: manifest?.deployedAtBlock ?? 0,
+    eventScanBlockChunk: env.EVENT_SCAN_BLOCK_CHUNK,
     requestMaxAgeSeconds: env.REQUEST_MAX_AGE_SECONDS,
     clockSkewSeconds: env.CLOCK_SKEW_SECONDS,
     frontendOrigins: env.FRONTEND_ORIGINS,

@@ -5,6 +5,7 @@ import { createApp, type AppDependencies } from "../src/app.js";
 import { MetadataService, buildMetadataAuthorizationMessage } from "../src/services/metadata-service.js";
 import { InMemoryAgentMetadataStore } from "../src/stores/agent-metadata-store.js";
 import { DemoIdentityWriteService, IdentityWriteError } from "../src/services/identity-write-service.js";
+import { EventScanUnavailableError } from "../src/blockchain/event-scanner.js";
 import type { RuntimeConfig } from "../src/config/runtime.js";
 import type { AgentRecord } from "../src/domain/types.js";
 import { FakeBlockchain, REGISTRY_ADDRESS, record, travelWallet } from "./helpers.js";
@@ -25,6 +26,25 @@ describe("Stage 5 identity portal APIs", () => {
     expect(response.status).toBe(200);
     expect(response.body.agents).toHaveLength(3);
     expect(response.body.agents[0]).toHaveProperty("owner");
+  });
+
+  it("returns HTTP 200 with an empty registry when no identities are registered", async () => {
+    const blockchain = new FakeBlockchain();
+    blockchain.records.clear();
+    const response = await request(app(blockchain)).get("/api/registry");
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ agents: [], metadataAvailable: true });
+  });
+
+  it("returns a sanitized service-unavailable response when an event chunk fails", async () => {
+    const blockchain = new FakeBlockchain();
+    vi.spyOn(blockchain, "listAgents").mockRejectedValue(
+      new EventScanUnavailableError("AgentRegistry event history is temporarily unavailable.", new Error("sensitive-provider-token")),
+    );
+    const response = await request(app(blockchain)).get("/api/registry");
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe("SERVICE_UNAVAILABLE");
+    expect(JSON.stringify(response.body)).not.toContain("sensitive-provider-token");
   });
 
   it("returns an individual Agent Passport record", async () => {
@@ -81,7 +101,7 @@ describe("Stage 5 identity portal APIs", () => {
 
 const demoAccounts = Array.from({ length: 10 }, () => Wallet.createRandom().address);
 function runtime(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
-  return { port: 4000, rpcUrl: "http://127.0.0.1:8545", registryAddress: REGISTRY_ADDRESS, expectedChainId: 31337, networkName: "localhost", manifestPath: "", artifactPath: "", requestMaxAgeSeconds: 300, clockSkewSeconds: 30, supabaseEnabled: false, nodeEnv: "development", enableDemoSigning: true, ...overrides };
+  return { port: 4000, rpcUrl: "http://127.0.0.1:8545", registryAddress: REGISTRY_ADDRESS, expectedChainId: 31337, networkName: "localhost", manifestPath: "", artifactPath: "", deploymentBlock: 1, eventScanBlockChunk: 10, requestMaxAgeSeconds: 300, clockSkewSeconds: 30, supabaseEnabled: false, nodeEnv: "development", enableDemoSigning: true, ...overrides };
 }
 function demoHarness(options: { assigned?: AgentRecord; chainId?: number; nodeEnv?: RuntimeConfig["nodeEnv"]; enabled?: boolean } = {}) {
   const chainId = options.chainId ?? 31337;

@@ -633,6 +633,10 @@ Final regression passed **31 / 31 blockchain tests**, **118 / 118 backend tests*
 
 Stage 9 — reviewed public testnet and hosting deployment. It has not started.
 
+### Stage 9 public event scanning note
+
+Production JSON-RPC providers may limit the block range accepted by `eth_getLogs`. AgentID reads AgentRegistry history from the contract deployment block recorded in the active deployment manifest and scans forward in bounded, inclusive chunks (10 blocks by default) instead of querying from block zero to latest in one request. All Registry, Passport lifecycle, Trust Graph, Explorer, Analytics, and Command Center paths that depend on AgentRegistry events use the shared scanner. A healthy public registry with no `AgentRegistered` events is a valid empty registry and returns an empty list rather than an availability error.
+
 ## Future Stages
 
 - Stage 9 — choose and review public infrastructure, then execute the checklist in `docs/DEPLOYMENT_READINESS.md` only with explicit approval.

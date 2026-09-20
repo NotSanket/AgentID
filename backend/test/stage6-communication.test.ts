@@ -17,7 +17,7 @@ import { InMemoryReplayStore } from "../src/stores/replay-store.js";
 import { FakeBlockchain, NOW, REGISTRY_ADDRESS, hotelWallet, makeRequest, paymentWallet, record, signRequest, strangerWallet, travelWallet } from "./helpers.js";
 
 function runtime(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
-  return { port: 4000, rpcUrl: "http://127.0.0.1:8545", registryAddress: REGISTRY_ADDRESS, expectedChainId: 31337, networkName: "localhost", manifestPath: "", artifactPath: "", requestMaxAgeSeconds: 300, clockSkewSeconds: 30, supabaseEnabled: false, nodeEnv: "development", enableDemoSigning: true, ...overrides };
+  return { port: 4000, rpcUrl: "http://127.0.0.1:8545", registryAddress: REGISTRY_ADDRESS, expectedChainId: 31337, networkName: "localhost", manifestPath: "", artifactPath: "", deploymentBlock: 1, eventScanBlockChunk: 10, requestMaxAgeSeconds: 300, clockSkewSeconds: 30, supabaseEnabled: false, nodeEnv: "development", enableDemoSigning: true, ...overrides };
 }
 
 function setup() {

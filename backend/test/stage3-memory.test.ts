@@ -16,6 +16,8 @@ function config(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
     networkName: "localhost",
     manifestPath: "manifest.json",
     artifactPath: "artifact.json",
+    deploymentBlock: 1,
+    eventScanBlockChunk: 10,
     requestMaxAgeSeconds: 300,
     clockSkewSeconds: 30,
     supabaseEnabled: false,

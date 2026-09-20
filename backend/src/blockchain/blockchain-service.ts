@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { Contract, JsonRpcProvider, getAddress, isAddress, type InterfaceAbi } from "ethers";
 import type { RuntimeConfig } from "../config/runtime.js";
 import type { AgentRecord, IdentityContractConfig, IdentityLifecycleEvent, IdentityLifecycleEventType, RegistryReader } from "../domain/types.js";
+import { scanEventsInChunks } from "./event-scanner.js";
 
 export interface BlockchainHealth {
   connected: boolean;
@@ -90,7 +91,7 @@ export class BlockchainService implements RegistryReader {
 
   async listAgents(): Promise<AgentRecord[]> {
     const contract = await this.requireOperationalContract();
-    const events = await contract.queryFilter(contract.filters.AgentRegistered(), 0, "latest");
+    const events = await this.scanEvents(contract, contract.filters.AgentRegistered());
     const ids = new Set<string>();
     for (const event of events) {
       if ("args" in event && typeof event.args?.agentId === "string") ids.add(event.args.agentId);
@@ -119,7 +120,7 @@ export class BlockchainService implements RegistryReader {
     ];
     const groups = await Promise.all(definitions.map(async ([eventName, type]) => {
       const filter = contract.filters[eventName]();
-      const events = await contract.queryFilter(filter, 0, "latest");
+      const events = await this.scanEvents(contract, filter);
       return events.flatMap((event): IdentityLifecycleEvent[] => {
         if (!("args" in event) || event.args?.agentId !== agentId) return [];
         return [{
@@ -137,6 +138,18 @@ export class BlockchainService implements RegistryReader {
 
   async getContract(): Promise<Contract> {
     return this.requireOperationalContract();
+  }
+
+  private async scanEvents(
+    contract: Contract,
+    filter: Parameters<Contract["queryFilter"]>[0],
+  ) {
+    return scanEventsInChunks({
+      deploymentBlock: this.config.deploymentBlock,
+      chunkSize: this.config.eventScanBlockChunk,
+      getLatestBlock: () => this.provider.getBlockNumber(),
+      queryRange: (fromBlock, toBlock) => contract.queryFilter(filter, fromBlock, toBlock),
+    });
   }
 
   private async requireOperationalContract(): Promise<Contract> {
