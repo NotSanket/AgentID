@@ -49,7 +49,7 @@ export class FakeBlockchain implements ApiBlockchain {
   async listAgents() { return [...this.records.values()]; }
   async contractConfig() { return { network: "localhost", chainId: 31337, registryAddress: REGISTRY_ADDRESS, abi: [] }; }
   async getLifecycleEvents(agentId: string) {
-    return this.records.has(agentId) ? [{ type: "Registered" as const, agentId, owner: this.records.get(agentId)!.owner, timestamp: "1", blockNumber: 1, transactionHash: `0x${"1".repeat(64)}` }] : [];
+    return this.records.has(agentId) ? [{ type: "Registered" as const, agentId, owner: this.records.get(agentId)!.owner, timestamp: "1", blockNumber: 1, logIndex: 0, transactionHash: `0x${"1".repeat(64)}` }] : [];
   }
 }
 

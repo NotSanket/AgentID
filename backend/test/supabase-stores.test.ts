@@ -69,7 +69,7 @@ describe("Stage 3 Supabase repositories with mocked clients", () => {
     const client = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient<Database>;
     const config = {
       port: 4000, rpcUrl: "http://localhost:8545", registryAddress: "0x0000000000000000000000000000000000000001",
-      expectedChainId: 31337, networkName: "localhost", manifestPath: "manifest", artifactPath: "artifact", deploymentBlock: 1, eventScanBlockChunk: 10,
+      expectedChainId: 31337, networkName: "localhost", manifestPath: "manifest", artifactPath: "artifact", deploymentBlock: 1, eventScanBlockChunk: 10, eventScanRequestDelayMs: 175,
       requestMaxAgeSeconds: 300, clockSkewSeconds: 30, nodeEnv: "test",
       supabaseEnabled: true, supabaseUrl: "https://example.supabase.co", supabaseServiceRoleKey: "server-only-test-key",
     } satisfies RuntimeConfig;
@@ -82,7 +82,7 @@ describe("Stage 3 Supabase repositories with mocked clients", () => {
     const client = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient<Database>;
     const config = {
       port: 4000, rpcUrl: "http://localhost:8545", registryAddress: "0x0000000000000000000000000000000000000001",
-      expectedChainId: 31337, networkName: "localhost", manifestPath: "manifest", artifactPath: "artifact", deploymentBlock: 1, eventScanBlockChunk: 10,
+      expectedChainId: 31337, networkName: "localhost", manifestPath: "manifest", artifactPath: "artifact", deploymentBlock: 1, eventScanBlockChunk: 10, eventScanRequestDelayMs: 175,
       requestMaxAgeSeconds: 300, clockSkewSeconds: 30, nodeEnv: "test",
       supabaseEnabled: true, supabaseUrl: "https://example.supabase.co", supabaseServiceRoleKey: "server-only-test-key",
     } satisfies RuntimeConfig;

@@ -37,6 +37,7 @@ export interface IdentityLifecycleEvent {
   owner: string;
   timestamp: string;
   blockNumber: number;
+  logIndex: number;
   transactionHash: string;
 }
 

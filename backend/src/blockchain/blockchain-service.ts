@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { Contract, JsonRpcProvider, getAddress, isAddress, type InterfaceAbi } from "ethers";
 import type { RuntimeConfig } from "../config/runtime.js";
-import type { AgentRecord, IdentityContractConfig, IdentityLifecycleEvent, IdentityLifecycleEventType, RegistryReader } from "../domain/types.js";
-import { scanEventsInChunks } from "./event-scanner.js";
+import type { AgentRecord, IdentityContractConfig, IdentityLifecycleEvent, RegistryReader } from "../domain/types.js";
+import { AgentRegistryEventReader } from "./agent-registry-event-reader.js";
+import type { EventScannerMetrics } from "./event-scanner.js";
 
 export interface BlockchainHealth {
   connected: boolean;
@@ -22,6 +23,7 @@ export class BlockchainService implements RegistryReader {
   readonly address: string;
   readonly abi: InterfaceAbi;
   private readonly contract?: Contract;
+  private readonly eventReader?: AgentRegistryEventReader;
   private readonly initializationError?: string;
 
   constructor(private readonly config: RuntimeConfig) {
@@ -35,6 +37,14 @@ export class BlockchainService implements RegistryReader {
       const artifact = JSON.parse(readFileSync(config.artifactPath, "utf8")) as Artifact;
       this.abi = artifact.abi;
       this.contract = new Contract(getAddress(this.address), artifact.abi, this.provider);
+      this.eventReader = new AgentRegistryEventReader({
+        provider: this.provider,
+        contractAddress: this.address,
+        contractInterface: this.contract.interface,
+        deploymentBlock: config.deploymentBlock,
+        chunkSize: config.eventScanBlockChunk,
+        requestDelayMs: config.eventScanRequestDelayMs,
+      });
     } catch (error) {
       this.initializationError = error instanceof Error ? error.message : String(error);
     }
@@ -90,11 +100,11 @@ export class BlockchainService implements RegistryReader {
   }
 
   async listAgents(): Promise<AgentRecord[]> {
-    const contract = await this.requireOperationalContract();
-    const events = await this.scanEvents(contract, contract.filters.AgentRegistered());
+    await this.requireOperationalContract();
+    const events = await this.scanLifecycleEvents();
     const ids = new Set<string>();
     for (const event of events) {
-      if ("args" in event && typeof event.args?.agentId === "string") ids.add(event.args.agentId);
+      if (event.type === "Registered") ids.add(event.agentId);
     }
     const records = await Promise.all([...ids].map((id) => this.getAgent(id)));
     return records.filter((record): record is AgentRecord => record !== null);
@@ -111,45 +121,21 @@ export class BlockchainService implements RegistryReader {
   }
 
   async getLifecycleEvents(agentId: string): Promise<IdentityLifecycleEvent[]> {
-    const contract = await this.requireOperationalContract();
-    const definitions: Array<[string, IdentityLifecycleEventType]> = [
-      ["AgentRegistered", "Registered"],
-      ["AgentUpdated", "Updated"],
-      ["AgentRevoked", "Revoked"],
-      ["AgentReactivated", "Reactivated"],
-    ];
-    const groups = await Promise.all(definitions.map(async ([eventName, type]) => {
-      const filter = contract.filters[eventName]();
-      const events = await this.scanEvents(contract, filter);
-      return events.flatMap((event): IdentityLifecycleEvent[] => {
-        if (!("args" in event) || event.args?.agentId !== agentId) return [];
-        return [{
-          type,
-          agentId,
-          owner: getAddress(event.args.owner),
-          timestamp: event.args.timestamp.toString(),
-          blockNumber: event.blockNumber,
-          transactionHash: event.transactionHash,
-        }];
-      });
-    }));
-    return groups.flat().sort((a, b) => a.blockNumber - b.blockNumber);
+    await this.requireOperationalContract();
+    return (await this.scanLifecycleEvents()).filter((event) => event.agentId === agentId);
   }
 
   async getContract(): Promise<Contract> {
     return this.requireOperationalContract();
   }
 
-  private async scanEvents(
-    contract: Contract,
-    filter: Parameters<Contract["queryFilter"]>[0],
-  ) {
-    return scanEventsInChunks({
-      deploymentBlock: this.config.deploymentBlock,
-      chunkSize: this.config.eventScanBlockChunk,
-      getLatestBlock: () => this.provider.getBlockNumber(),
-      queryRange: (fromBlock, toBlock) => contract.queryFilter(filter, fromBlock, toBlock),
-    });
+  eventScanMetrics(): EventScannerMetrics {
+    return this.eventReader?.metrics() ?? { lastScannedBlock: null, cachedEventCount: 0, totalLogRequests: 0 };
+  }
+
+  private async scanLifecycleEvents() {
+    if (!this.eventReader) throw new Error(this.initializationError ?? "AgentRegistry event reader is unavailable.");
+    return this.eventReader.scan();
   }
 
   private async requireOperationalContract(): Promise<Contract> {

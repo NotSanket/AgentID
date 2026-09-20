@@ -13,6 +13,7 @@ const environmentSchema = z.object({
   REQUEST_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(300),
   CLOCK_SKEW_SECONDS: z.coerce.number().int().nonnegative().default(30),
   EVENT_SCAN_BLOCK_CHUNK: z.coerce.number().int().positive().default(10),
+  EVENT_SCAN_REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(175),
   FRONTEND_ORIGINS: z.string()
     .default("http://localhost:5173,http://127.0.0.1:5173")
     .transform((value) => value.split(",").map((origin) => origin.trim()).filter(Boolean))
@@ -43,6 +44,7 @@ export interface RuntimeConfig {
   artifactPath: string;
   deploymentBlock: number;
   eventScanBlockChunk: number;
+  eventScanRequestDelayMs: number;
   requestMaxAgeSeconds: number;
   clockSkewSeconds: number;
   frontendOrigins?: string[];
@@ -95,6 +97,7 @@ export function loadRuntimeConfig(environment: NodeJS.ProcessEnv = process.env):
       : defaultArtifactPath,
     deploymentBlock: manifest?.deployedAtBlock ?? 0,
     eventScanBlockChunk: env.EVENT_SCAN_BLOCK_CHUNK,
+    eventScanRequestDelayMs: env.EVENT_SCAN_REQUEST_DELAY_MS,
     requestMaxAgeSeconds: env.REQUEST_MAX_AGE_SECONDS,
     clockSkewSeconds: env.CLOCK_SKEW_SECONDS,
     frontendOrigins: env.FRONTEND_ORIGINS,

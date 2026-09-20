@@ -18,6 +18,7 @@ function config(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
     artifactPath: "artifact.json",
     deploymentBlock: 1,
     eventScanBlockChunk: 10,
+    eventScanRequestDelayMs: 175,
     requestMaxAgeSeconds: 300,
     clockSkewSeconds: 30,
     supabaseEnabled: false,

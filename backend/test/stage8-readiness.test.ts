@@ -31,6 +31,7 @@ describe("Stage 8 production configuration readiness", () => {
       supabaseEnabled: true,
       deploymentBlock: 0,
       eventScanBlockChunk: 10,
+      eventScanRequestDelayMs: 175,
     });
   });
 
@@ -42,6 +43,7 @@ describe("Stage 8 production configuration readiness", () => {
     expect(config.manifestPath.replaceAll("\\", "/")).toMatch(/blockchain\/deployments\/sepolia\.json$/);
     expect(config.deploymentBlock).toBe(11743199);
     expect(config.eventScanBlockChunk).toBe(10);
+    expect(config.eventScanRequestDelayMs).toBe(175);
   });
 
   it("accepts an optional positive event scan chunk override", () => {
