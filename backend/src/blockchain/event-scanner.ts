@@ -1,8 +1,9 @@
-
 export const DEFAULT_EVENT_SCAN_BLOCK_CHUNK = 10;
 export const DEFAULT_EVENT_SCAN_REQUEST_DELAY_MS = 175;
 export const DEFAULT_EVENT_SCAN_MAX_ATTEMPTS = 3;
 export const DEFAULT_EVENT_SCAN_RETRY_DELAYS_MS = [300, 700] as const;
+/** Maximum RPC chunks handled by a single scan call before returning partial results. */
+export const DEFAULT_EVENT_SCAN_MAX_CHUNKS_PER_SCAN = 20;
 
 export interface ScannableEvent {
   blockNumber: number;
@@ -34,6 +35,8 @@ export interface CachedEventScannerOptions<
   requestDelayMs?: number;
   maxAttempts?: number;
   retryDelaysMs?: readonly number[];
+  /** Maximum chunks fetched in one scan call. Defaults to 20. */
+  maxChunksPerScan?: number;
   getLatestBlock: () => Promise<number>;
   queryRange: (
     fromBlock: number,
@@ -182,6 +185,7 @@ export class CachedEventScanner<
   private readonly requestDelayMs: number;
   private readonly maxAttempts: number;
   private readonly retryDelaysMs: readonly number[];
+  private readonly maxChunksPerScan: number;
   private readonly sleep: (
     milliseconds: number
   ) => Promise<void>;
@@ -208,6 +212,9 @@ export class CachedEventScanner<
     this.retryDelaysMs =
       options.retryDelaysMs ??
       DEFAULT_EVENT_SCAN_RETRY_DELAYS_MS;
+
+    this.maxChunksPerScan =
+      options.maxChunksPerScan ?? DEFAULT_EVENT_SCAN_MAX_CHUNKS_PER_SCAN;
 
     this.sleep =
       options.sleep ??
@@ -247,6 +254,15 @@ export class CachedEventScanner<
     ) {
       throw new RangeError(
         "The event scan attempt limit must be a positive safe integer."
+      );
+    }
+
+    if (
+      !Number.isSafeInteger(this.maxChunksPerScan) ||
+      this.maxChunksPerScan < 1
+    ) {
+      throw new RangeError(
+        "The maximum chunks per scan must be a positive safe integer."
       );
     }
   }
@@ -296,12 +312,16 @@ export class CachedEventScanner<
       return this.sortedEvents(this.cachedEvents);
     }
 
+    // Stage cache changes for this scan and publish them only when every
+    // requested chunk succeeds. If a later chunk fails, callers continue to
+    // see the previous consistent in-memory cache and checkpoint.
     const stagedEvents = new Map(this.cachedEvents);
     let chunkIndex = 0;
+    let lastSuccessfullyScannedBlock = this.lastScannedBlock;
 
     for (
       let start = startBlock;
-      start <= latestBlock;
+      start <= latestBlock && chunkIndex < this.maxChunksPerScan;
       start += this.chunkSize
     ) {
       const end = Math.min(
@@ -315,7 +335,9 @@ export class CachedEventScanner<
 
       const chunk = await this.queryWithRetries(start, end);
 
-      // Persist only after this chunk has been fetched successfully.
+      // Persist only after this chunk has been fetched successfully. Stores
+      // can safely upsert chunks, so retrying a previously persisted chunk is
+      // idempotent if a later chunk in this scan fails.
       await this.options.persistChunk?.(chunk, end);
 
       for (const event of chunk) {
@@ -329,11 +351,15 @@ export class CachedEventScanner<
         }
       }
 
+      lastSuccessfullyScannedBlock = end;
       chunkIndex += 1;
     }
 
+    // A bounded scan publishes its successful partial progress here. If any
+    // chunk throws above, these assignments are skipped and the prior cache
+    // remains intact.
     this.cachedEvents = stagedEvents;
-    this.lastScannedBlock = latestBlock;
+    this.lastScannedBlock = lastSuccessfullyScannedBlock;
 
     return this.sortedEvents(this.cachedEvents);
   }
