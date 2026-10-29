@@ -89,7 +89,7 @@ For EIP-712 communication, the backend validates the complete request schema, re
 Security-critical failures are fail-closed:
 
 - RPC or registry unavailable: verification cannot establish identity; receiver is not executed.
-- replay-store unavailable: request returns service unavailable; receiver is not executed.
+- production replay-store unavailable: `/api/verify` and `/api/communication/send` return `503 PERSISTENCE_UNAVAILABLE` before authentication; the nonce is not consumed and the receiver is not executed.
 - invalid, expired, modified, replayed, revoked, or impersonated request: blocked before routing.
 - audit or interaction persistence failure after a completed verified delivery: the real delivery remains reported, with an explicit persistence-degraded warning.
 

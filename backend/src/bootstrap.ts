@@ -46,6 +46,7 @@ export async function bootstrap() {
     stage7Insights,
     securityScenarios,
     persistenceStatus: persistence.status,
+    requirePersistentCommunication: config.nodeEnv === "production",
     frontendOrigins: config.frontendOrigins,
   });
   return {

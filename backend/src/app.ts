@@ -96,11 +96,23 @@ export interface AppDependencies {
   stage7Insights?: Stage7InsightsService;
   securityScenarios?: SecurityScenarioService;
   persistenceStatus: PersistenceStatus;
+  requirePersistentCommunication?: boolean;
   frontendOrigins?: readonly string[];
 }
 
 export function createApp(dependencies: AppDependencies) {
   const app = express();
+  const persistentCommunicationUnavailable = () =>
+    dependencies.requirePersistentCommunication === true
+    && (dependencies.persistenceStatus.mode !== "SUPABASE" || !dependencies.persistenceStatus.supabaseConnected);
+  const rejectWithoutPersistentReplayProtection = (response: Response) => {
+    if (!persistentCommunicationUnavailable()) return false;
+    response.status(503).json({
+      code: "PERSISTENCE_UNAVAILABLE",
+      reason: "Persistent replay protection is unavailable; the signed request was not authenticated or delivered.",
+    });
+    return true;
+  };
   app.disable("x-powered-by");
   app.use((request, response, next) => {
     const trustedOrigins = new Set(dependencies.frontendOrigins ?? ["http://localhost:5173", "http://127.0.0.1:5173"]);
@@ -190,6 +202,7 @@ export function createApp(dependencies: AppDependencies) {
   });
 
   app.post("/api/verify", async (request, response) => {
+    if (rejectWithoutPersistentReplayProtection(response)) return;
     const parsed = signedRequestSchema.safeParse(request.body);
     const result = parsed.success
       ? await dependencies.authentication.authenticate(parsed.data.request, parsed.data.signature)
@@ -198,6 +211,7 @@ export function createApp(dependencies: AppDependencies) {
   });
 
   app.post("/api/communication/send", async (request, response) => {
+    if (rejectWithoutPersistentReplayProtection(response)) return;
     const parsed = signedRequestSchema.safeParse(request.body);
     const result = parsed.success
       ? await dependencies.communication.send(parsed.data.request, parsed.data.signature)

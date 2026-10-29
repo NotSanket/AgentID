@@ -54,7 +54,7 @@ Production safeguards include:
 - `ENABLE_DEMO_SIGNING=false`;
 - no unlocked Hardhat accounts or Local Demo Wallet in production;
 - an exact frontend-origin CORS allowlist rather than wildcard CORS;
-- bounded request validation and fail-closed authentication dependencies;
+- bounded request validation and fail-closed production verification/delivery when persistent replay storage is unavailable;
 - Supabase uniqueness for `(sender_agent_id, nonce)` as the persistent replay boundary;
 - receiver execution only after successful authentication.
 

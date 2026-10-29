@@ -20,7 +20,10 @@ function runtime(overrides: Partial<RuntimeConfig> = {}): RuntimeConfig {
   return { port: 4000, rpcUrl: "http://127.0.0.1:8545", registryAddress: REGISTRY_ADDRESS, expectedChainId: 31337, networkName: "localhost", manifestPath: "", artifactPath: "", deploymentBlock: 1, eventScanBlockChunk: 10, eventScanRequestDelayMs: 175, requestMaxAgeSeconds: 300, clockSkewSeconds: 30, supabaseEnabled: false, nodeEnv: "development", enableDemoSigning: true, ...overrides };
 }
 
-function setup() {
+function setup(options: {
+  persistenceStatus?: AppDependencies["persistenceStatus"];
+  requirePersistentCommunication?: boolean;
+} = {}) {
   const blockchain = new FakeBlockchain();
   const auditStore = new InMemoryAuditStore();
   const interactionStore = new InMemoryInteractionStore();
@@ -32,7 +35,18 @@ function setup() {
   const communication = new CommunicationService(authentication, router, interactionStore);
   const preparation = new CommunicationPreparationService({ chainId: 31337, verifyingContract: REGISTRY_ADDRESS }, () => NOW);
   const metadata = new MetadataService(blockchain, new InMemoryAgentMetadataStore());
-  const app = createApp({ blockchain, authentication, communication, communicationPreparation: preparation, auditStore, interactionStore, analytics: new AnalyticsService(auditStore, interactionStore, blockchain), metadata, persistenceStatus: { mode: "IN_MEMORY", supabaseConnected: false } });
+  const app = createApp({
+    blockchain,
+    authentication,
+    communication,
+    communicationPreparation: preparation,
+    auditStore,
+    interactionStore,
+    analytics: new AnalyticsService(auditStore, interactionStore, blockchain),
+    metadata,
+    persistenceStatus: options.persistenceStatus ?? { mode: "IN_MEMORY", supabaseConnected: false },
+    requirePersistentCommunication: options.requirePersistentCommunication,
+  });
   return { app, blockchain, auditStore, interactionStore, handle, communication, preparation };
 }
 
@@ -60,6 +74,38 @@ describe("Stage 6 communication preparation", () => {
 });
 
 describe("Stage 6 authenticated delivery", () => {
+  it("fails closed before authentication when production replay persistence is unavailable", async () => {
+    const { app, handle, auditStore } = setup({
+      persistenceStatus: { mode: "IN_MEMORY", supabaseConnected: false, warning: "Supabase unavailable." },
+      requirePersistentCommunication: true,
+    });
+    const value = makeRequest();
+    const signature = await signRequest(value);
+
+    const verification = await request(app).post("/api/verify").send({ request: value, signature });
+    const delivery = await request(app).post("/api/communication/send").send({ request: value, signature });
+
+    expect(verification.status).toBe(503);
+    expect(verification.body).toMatchObject({ code: "PERSISTENCE_UNAVAILABLE" });
+    expect(delivery.status).toBe(503);
+    expect(delivery.body).toMatchObject({ code: "PERSISTENCE_UNAVAILABLE" });
+    expect(handle).not.toHaveBeenCalled();
+    expect((await auditStore.list({ limit: 5, offset: 0 })).events).toHaveLength(0);
+  });
+
+  it("keeps authenticated delivery available when required persistence is connected", async () => {
+    const { app, handle } = setup({
+      persistenceStatus: { mode: "SUPABASE", supabaseConnected: true },
+      requirePersistentCommunication: true,
+    });
+    const value = makeRequest();
+    const response = await request(app).post("/api/communication/send").send({ request: value, signature: await signRequest(value) });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ delivered: true, verification: { code: "VERIFIED" } });
+    expect(handle).toHaveBeenCalledOnce();
+  });
+
   it("returns a structured verified result and persists the successful interaction", async () => {
     const { app, handle, interactionStore } = setup(); const value = makeRequest();
     const response = await request(app).post("/api/communication/send").send({ request: value, signature: await signRequest(value) });
